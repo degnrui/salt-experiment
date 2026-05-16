@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教师看板</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="shell stack">
+    <section class="card stack" id="login-card">
+      <h1>教师看板</h1>
+      <div class="row">
+        <input id="username" value="teacher" placeholder="用户名">
+        <input id="password" type="password" value="teacher123" placeholder="密码">
+        <button id="login-btn">登录</button>
+      </div>
+    </section>
+
+    <section class="card stack" id="classroom-card" hidden>
+      <h2>创建课堂</h2>
+      <div class="row">
+        <input id="classroom-name" placeholder="课堂名称">
+        <input id="group-count" type="number" min="1" max="20" value="5">
+        <button id="create-btn">创建课堂</button>
+      </div>
+      <select id="classroom-select"></select>
+      <div id="codes"></div>
+    </section>
+
+    <section class="stack" id="dashboard" hidden>
+      <div class="grid stats" id="summary"></div>
+      <div class="card">
+        <h2>按任务统计</h2>
+        <div id="tasks"></div>
+      </div>
+      <div class="card">
+        <h2>错误统计</h2>
+        <div id="errors"></div>
+      </div>
+      <div class="card">
+        <h2>各组提交历史</h2>
+        <div id="groups"></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    let currentClassroomId = null;
+
+    async function loadClassrooms() {
+      const classrooms = await fetch('/api/classrooms').then(response => response.json());
+      const select = document.getElementById('classroom-select');
+      select.innerHTML = classrooms.map(room => `<option value="${room.id}">${room.name}</option>`).join('');
+      if (classrooms[0]) {
+        currentClassroomId = classrooms[0].id;
+        loadDashboard();
+      }
+    }
+
+    async function loadDashboard() {
+      if (!currentClassroomId) return;
+      const data = await fetch(`/api/classrooms/${currentClassroomId}/dashboard`).then(response => response.json());
+      document.getElementById('dashboard').hidden = false;
+      document.getElementById('summary').innerHTML = `
+        <div class="card stat"><span>总提交数</span><strong>${data.summary.totalSubmissions}</strong></div>
+        <div class="card stat"><span>正确提交数</span><strong>${data.summary.correctSubmissions}</strong></div>
+        <div class="card stat"><span>正确率</span><strong>${Math.round(data.summary.correctRate * 100)}%</strong></div>
+      `;
+      document.getElementById('tasks').innerHTML = Object.entries(data.taskStats)
+        .map(([task, stat]) => `<p>${task}：${stat.correct}/${stat.total}，正确率 ${Math.round(stat.correctRate * 100)}%</p>`)
+        .join('');
+      document.getElementById('errors').innerHTML = Object.entries(data.errorCounts)
+        .map(([key, value]) => `<p>${data.errorLabels[key]}：${value}</p>`).join('');
+      document.getElementById('groups').innerHTML = data.groups.map(group => `
+        <section class="history">
+          <h3>${group.name} <span class="muted">${group.joinCode}</span></h3>
+          ${group.submissions.map(item => `
+            <p>
+              ${item.submittedAt} · ${item.taskType} ·
+              <span class="${item.isCorrect ? 'ok' : 'bad'}">${item.isCorrect ? '正确' : item.errorLabels.join('、')}</span>
+            </p>
+            <p class="muted">
+              A：${item.beakerA.water.type}/${item.beakerA.water.amount}，${item.beakerA.salt.type}/${item.beakerA.salt.amount}，搅拌 ${item.beakerA.stir}
+              | B：${item.beakerB.water.type}/${item.beakerB.water.amount}，${item.beakerB.salt.type}/${item.beakerB.salt.amount}，搅拌 ${item.beakerB.stir}
+              | 加盐 ${item.saltTiming || '-'}，搅拌 ${item.stirTiming || '-'}
+            </p>
+          `).join('') || '<p class="muted">尚无提交</p>'}
+        </section>
+      `).join('');
+    }
+
+    document.getElementById('login-btn').addEventListener('click', async () => {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: document.getElementById('username').value,
+          password: document.getElementById('password').value
+        })
+      });
+      if (!response.ok) return alert('登录失败');
+      document.getElementById('classroom-card').hidden = false;
+      loadClassrooms();
+    });
+
+    document.getElementById('create-btn').addEventListener('click', async () => {
+      const classroom = await fetch('/api/classrooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: document.getElementById('classroom-name').value,
+          groupCount: Number(document.getElementById('group-count').value)
+        })
+      }).then(response => response.json());
+      document.getElementById('codes').innerHTML = classroom.groups
+        .map(group => `<p>${group.name}：<strong>${group.joinCode}</strong></p>`).join('');
+      currentClassroomId = classroom.id;
+      await loadClassrooms();
+      await loadDashboard();
+    });
+
+    document.getElementById('classroom-select').addEventListener('change', event => {
+      currentClassroomId = event.target.value;
+      loadDashboard();
+    });
+
+    setInterval(loadDashboard, 5000);
+  </script>
+</body>
+</html>

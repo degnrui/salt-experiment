@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>食盐溶解快慢探究虚拟仿真 (物理系统升级版)</title>
+    <!-- 引入 html2canvas 用于导出记录单 -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --primary: #00796b;
+            --bg: #e0f2f1;
+            --panel-bg: #ffffff;
+            --text: #333333;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            font-family: "Microsoft YaHei", sans-serif;
+            background-color: var(--bg);
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* 左侧 Canvas 区域 */
+        #canvas-container {
+            flex: 7;
+            position: relative;
+            background: linear-gradient(to bottom, #e0f2f1 60%, #b2dfdb 100%);
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 右侧工具栏 - 布局压缩紧凑 */
+        #toolbar {
+            flex: 3;
+            background: var(--panel-bg);
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 10;
+            overflow-y: auto;
+            min-width: 320px;
+        }
+        .tool-section {
+            border: 1px solid #b2dfdb;
+            border-radius: 8px;
+            padding: 10px;
+            background: #f1f8f8;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .tool-section h3 {
+            margin: 0 0 8px 0;
+            font-size: 15px;
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            padding-bottom: 4px;
+            display: inline-block;
+        }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: 0.2s;
+            margin: 4px 0;
+            width: 100%;
+            font-weight: bold;
+        }
+        .btn:hover { background: #004d40; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+        
+        .btn-group { display: flex; gap: 8px; }
+        .btn-group .btn { flex: 1; }
+
+        .control-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 13px;}
+        input[type="range"] { width: 55%; cursor: pointer;}
+        input[type="radio"], input[type="checkbox"] { cursor: pointer; }
+
+        /* 备盐区样式 */
+        .prep-box { background: #fff; border: 1px solid #cfd8dc; padding: 10px; border-radius: 6px; margin-bottom: 8px; box-shadow: inset 0 0 5px rgba(0,0,0,0.02);}
+        .prep-header { font-weight: bold; color: #004d40; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 14px;}
+        
+        .target-box { background: #e0f2f1; padding: 10px; border-radius: 6px; border: 1px dashed #00796b; margin-top: 5px; }
+
+        /* 记录单 */
+        #record-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            display: none; justify-content: center; align-items: center; z-index: 200;
+        }
+        .modal-content {
+            background: #fff; width: 900px; max-height: 90vh; overflow-y: auto;
+            border-radius: 10px; padding: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            position: relative;
+        }
+        .close-btn { position: absolute; top: 15px; right: 20px; font-size: 28px; cursor: pointer; color: #666;}
+        .close-btn:hover { color: #f44336; }
+        table.record-table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: center; font-size: 14px;}
+        table.record-table th, table.record-table td { border: 1px solid #455a64; padding: 8px; }
+        table.record-table th { background: #e0f7fa; color: #006064; }
+        .checkbox-group { display: flex; flex-wrap: wrap; gap: 5px; text-align: left;}
+        .red-text { color: #d32f2f; font-weight: bold; }
+        textarea { width: 90%; border: 1px solid #ccc; border-radius: 4px; color: #d32f2f; font-family: inherit; padding: 5px; resize: none; font-weight: bold;}
+    </style>
+</head>
+<body>
+
+    <!-- 左侧仿真渲染区域 -->
+    <div id="canvas-container">
+        <canvas id="simCanvas"></canvas>
+    </div>
+
+    <!-- 右侧工具栏 -->
+    <div id="toolbar">
+        <h2 style="margin:0; color:#004d40; text-align:center; font-size: 20px;">实验操作箱</h2>
+        
+        <div class="tool-section">
+            <h3>💧 第一步：准备水 (100ml)</h3>
+            <div class="control-row">
+                <label><input type="radio" name="waterTemp" value="20" checked> 20℃ 冷水</label>
+                <label><input type="radio" name="waterTemp" value="80"> 80℃ 热水</label>
+            </div>
+            <div class="btn-group">
+                <button class="btn" onclick="uiAddWater(1)">加至1号杯</button>
+                <button class="btn" onclick="uiAddWater(2)">加至2号杯</button>
+            </div>
+        </div>
+
+        <div class="tool-section">
+            <h3>🧂 第二步：食盐设置与加入</h3>
+            
+            <div class="prep-box">
+                <div class="prep-header">1号杯食盐设置:</div>
+                <div class="control-row">
+                    <span>质量: <b id="val-1" style="color:#d32f2f;">10</b>g</span>
+                    <input type="range" id="mass-1" min="5" max="30" value="10" step="1" oninput="document.getElementById('val-1').innerText=this.value">
+                </div>
+                <div class="control-row">
+                    <span>颗粒状态:</span>
+                    <label><input type="radio" name="type-1" value="coarse" checked> 粗盐</label>
+                    <label><input type="radio" name="type-1" value="fine"> 细盐</label>
+                </div>
+            </div>
+
+            <div class="prep-box">
+                <div class="prep-header">2号杯食盐设置:</div>
+                <div class="control-row">
+                    <span>质量: <b id="val-2" style="color:#d32f2f;">10</b>g</span>
+                    <input type="range" id="mass-2" min="5" max="30" value="10" step="1" oninput="document.getElementById('val-2').innerText=this.value">
+                </div>
+                <div class="control-row">
+                    <span>颗粒状态:</span>
+                    <label><input type="radio" name="type-2" value="coarse" checked> 粗盐</label>
+                    <label><input type="radio" name="type-2" value="fine"> 细盐</label>
+                </div>
+            </div>
+
+            <!-- 目标勾选区域 (隐性支持同时倒入) -->
+            <div class="target-box">
+                <div style="font-size:12px; margin-bottom:8px; font-weight:bold; color:#004d40;">📌 选择要加入食盐的目标烧杯：</div>
+                <div class="control-row" style="justify-content: flex-start; gap: 20px;">
+                    <label><input type="checkbox" id="target-1" checked> 1号烧杯</label>
+                    <label><input type="checkbox" id="target-2" checked> 2号烧杯</label>
+                </div>
+                <button class="btn" style="background:#d84315; font-size:14px; margin-top:8px;" onclick="uiExecuteAddSalt()">⏬ 确定加入</button>
+            </div>
+        </div>
+
+        <div class="tool-section">
+            <h3>🥢 第三步：搅拌控制</h3>
+            <div class="btn-group">
+                <button class="btn" id="btn-stir-1" onclick="uiToggleStir(1)" style="background:#ff9800;">1号杯：开启搅拌</button>
+                <button class="btn" id="btn-stir-2" onclick="uiToggleStir(2)" style="background:#ff9800;">2号杯：开启搅拌</button>
+            </div>
+        </div>
+
+        <div class="tool-section" style="margin-top: auto; border:none; background:transparent;">
+            <button class="btn" onclick="document.getElementById('record-modal').style.display='flex'" style="background:#1976d2;">📝 打开活动记录表</button>
+            <button class="btn" onclick="if(confirm('倒掉烧杯里的液体，重置所有实验状态？')) location.reload();" style="background:#e53935;">🔄 倒掉重置</button>
+        </div>
+    </div>
+
+    <!-- 实验记录单 Modal -->
+    <div id="record-modal">
+        <div class="modal-content" id="export-target">
+            <span class="close-btn" onclick="document.getElementById('record-modal').style.display='none'">&times;</span>
+            <h2 style="text-align:center; color:#004d40;">📝 活动记录：探究加快食盐在水中溶解的方法</h2>
+            <div style="text-align:right;">日期：<input type="text" style="border:none; border-bottom:1px solid #333; outline:none; width:120px; text-align:center; font-family:inherit;"></div>
+            <table class="record-table">
+                <tr><th width="12%">探究内容</th><th width="29%">实验一：搅拌的影响</th><th width="29%">实验二：温度的影响</th><th width="30%">实验三：颗粒粗细的影响</th></tr>
+                <tr><td>改变的因素</td>
+                    <td><input type="text" class="red-text" style="width:80%; text-align:center; border:none; border-bottom:1px dashed #ccc; outline:none;"></td>
+                    <td><input type="text" class="red-text" style="width:80%; text-align:center; border:none; border-bottom:1px dashed #ccc; outline:none;"></td>
+                    <td><input type="text" class="red-text" style="width:80%; text-align:center; border:none; border-bottom:1px dashed #ccc; outline:none;"></td>
+                </tr>
+                <tr><td>不改变的因素</td>
+                    <td><div class="checkbox-group"><label><input type="checkbox">水的多少</label><label><input type="checkbox">水的温度</label><label><input type="checkbox">食盐多少</label><label><input type="checkbox">食盐粗细</label></div></td>
+                    <td><div class="checkbox-group"><label><input type="checkbox">水的多少</label><label><input type="checkbox">食盐多少</label><label><input type="checkbox">是否搅拌</label><label><input type="checkbox">食盐粗细</label></div></td>
+                    <td><div class="checkbox-group"><label><input type="checkbox">水的多少</label><label><input type="checkbox">水的温度</label><label><input type="checkbox">食盐多少</label><label><input type="checkbox">是否搅拌</label></div></td>
+                </tr>
+                <tr><td>溶解时间</td>
+                    <td>搅拌：<label><input type="radio" name="t11">少</label> <label><input type="radio" name="t11">多</label><br>不搅：<label><input type="radio" name="t12">少</label> <label><input type="radio" name="t12">多</label></td>
+                    <td>热水：<label><input type="radio" name="t21">少</label> <label><input type="radio" name="t21">多</label><br>冷水：<label><input type="radio" name="t22">少</label> <label><input type="radio" name="t22">多</label></td>
+                    <td>细盐：<label><input type="radio" name="t31">少</label> <label><input type="radio" name="t31">多</label><br>粗盐：<label><input type="radio" name="t32">少</label> <label><input type="radio" name="t32">多</label></td>
+                </tr>
+                <tr><td>我的发现</td>
+                    <td><textarea rows="3"></textarea></td>
+                    <td><textarea rows="3"></textarea></td>
+                    <td><textarea rows="3"></textarea></td>
+                </tr>
+            </table>
+            
+            <div id="modal-actions" style="text-align: center; margin-top: 25px;">
+                <button class="btn" style="width: auto; background: #2e7d32; font-size: 16px; padding: 10px 20px;" onclick="exportRecordImage()">📷 将填好的记录单导出为图片</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Canvas 渲染核心逻辑 -->
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let dpr = window.devicePixelRatio || 1;
+        let cw = 0, ch = 0; 
+
+        // 全局状态
+        let state = {
+            steamParticles: [] 
+        };
+
+        const B_WIDTH = 140, B_HEIGHT = 180, B_RADIUS = 15, WATER_BASE_HEIGHT = 110;
+
+        // 烧杯物理模型与计时器状态
+        let beakers = [
+            { id: 1, x: 0, y: 0, hasWater: false, temp: 20, autoStirring: false, stirSpeed: 0, stirAngle: 0, 
+              saltParticles: [], initialMass: 0, initialArea: 0, 
+              isDissolving: false, startTime: 0, elapsedTime: 0, finishedTime: 0 },
+            { id: 2, x: 0, y: 0, hasWater: false, temp: 20, autoStirring: false, stirSpeed: 0, stirAngle: 0, 
+              saltParticles: [], initialMass: 0, initialArea: 0, 
+              isDissolving: false, startTime: 0, elapsedTime: 0, finishedTime: 0 }
+        ];
+
+        // 窗口自适应
+        function resize() {
+            cw = document.getElementById('canvas-container').clientWidth;
+            ch = document.getElementById('canvas-container').clientHeight;
+            canvas.width = cw * dpr; canvas.height = ch * dpr;
+            ctx.scale(dpr, dpr);
+            beakers[0].x = cw * 0.3 - B_WIDTH / 2; beakers[0].y = ch * 0.5 - B_HEIGHT / 2;
+            beakers[1].x = cw * 0.7 - B_WIDTH / 2; beakers[1].y = ch * 0.5 - B_HEIGHT / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // 核心物理引擎与计时器
+        function updatePhysics() {
+            let now = Date.now();
+
+            beakers.forEach(b => {
+                // --- 自动搅拌控制 ---
+                if (b.autoStirring) {
+                    b.stirSpeed = 5.0; // 开启搅拌时保持恒定高转速
+                } else {
+                    b.stirSpeed *= 0.92; // 停止时水流自然衰减
+                }
+                
+                let waterY = b.y + B_HEIGHT - WATER_BASE_HEIGHT; 
+
+                // --- 计时器逻辑 ---
+                if (b.isDissolving) {
+                    b.elapsedTime = (now - b.startTime) / 1000;
+                    // 检测是否完全溶解
+                    if (b.saltParticles.length === 0) {
+                        b.isDissolving = false;
+                        b.finishedTime = b.elapsedTime;
+                    }
+                }
+
+                // 更新每一个食盐结晶立方体
+                for (let i = b.saltParticles.length - 1; i >= 0; i--) {
+                    let p = b.saltParticles[i];
+                    
+                    // --- 受力与运动系统 ---
+                    // 自动搅拌器引起的水流卷起与旋涡力
+                    if (b.hasWater && b.stirSpeed > 1.5 && p.y > waterY) {
+                        let cx = b.x + B_WIDTH/2;
+                        let distToCenter = p.x - cx;
+                        
+                        // 水流把底部的盐卷起来
+                        p.vy -= (Math.random() * b.stirSpeed * 0.08); 
+                        // 旋涡横向推力
+                        p.vx += (distToCenter < 0 ? 1 : -1) * b.stirSpeed * 0.03; 
+                    }
+
+                    // 重力与水中浮力/阻力
+                    if (p.y < p.targetY || p.vy < 0) {
+                        p.vy += 0.6; // 重力
+                        p.x += p.vx;
+                        p.y += p.vy;
+
+                        // 浸入水中的阻力
+                        if (b.hasWater && p.y > waterY) {
+                            p.vy *= 0.85; 
+                            p.vx *= 0.90;
+                        }
+
+                        // 杯壁反弹限制
+                        if (p.x < b.x + p.size/2) { p.x = b.x + p.size/2; p.vx *= -0.5; }
+                        if (p.x > b.x + B_WIDTH - p.size/2) { p.x = b.x + B_WIDTH - p.size/2; p.vx *= -0.5; }
+                        
+                        // 落到底层堆积
+                        if (p.y > p.targetY) {
+                            p.y = p.targetY;
+                            p.vy = 0; p.vx = 0;
+                        }
+                    }
+
+                    // --- 溶解系统 ---
+                    if (b.hasWater && p.y >= waterY) {
+                        let dissolveRate = 0.0010; 
+                        
+                        // ===== 溶解速率科学倍率：温度 > 颗粒粗细 > 搅拌 =====
+                        if (b.temp === 80) dissolveRate *= 12.0; 
+                        if (p.originalSize < 6) dissolveRate *= 1.5; 
+                        
+                        if (b.stirSpeed > 1.0) {
+                            let stirMultiplier = 1 + b.stirSpeed * 0.1;
+                            if (stirMultiplier > 2.0) stirMultiplier = 2.0; 
+                            dissolveRate *= stirMultiplier;
+                        }
+
+                        p.size -= dissolveRate; 
+                    }
+
+                    if (p.size <= 0.8) {
+                        b.saltParticles.splice(i, 1);
+                    }
+                }
+
+                // 热水蒸汽特效
+                if (b.hasWater && b.temp === 80 && Math.random() < 0.1) {
+                    state.steamParticles.push({
+                        x: b.x + B_WIDTH/2 + (Math.random() - 0.5) * 80,
+                        y: b.y + B_HEIGHT - WATER_BASE_HEIGHT,
+                        vx: (Math.random() - 0.5) * 0.5, vy: -1 - Math.random() * 1.5,
+                        life: 1.0, size: 8 + Math.random() * 12
+                    });
+                }
+            });
+
+            // 更新蒸汽粒子
+            for (let i = state.steamParticles.length - 1; i >= 0; i--) {
+                let p = state.steamParticles[i];
+                p.x += p.vx; p.y += p.vy; p.life -= 0.015;
+                if (p.life <= 0) state.steamParticles.splice(i, 1);
+            }
+        }
+
+        // --- 绘图辅助函数 ---
+        function makeBeakerPath(x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h - r); ctx.arcTo(x, y + h, x + r, y + h, r);
+            ctx.lineTo(x + w - r, y + h); ctx.arcTo(x + w, y + h, x + w, y + h - r, r); ctx.lineTo(x + w, y);
+        }
+        function fillRoundRect(x, y, w, h, r) {
+            ctx.beginPath(); ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.arcTo(x + w, y, x + w, y + r, r);
+            ctx.lineTo(x + w, y + h - r); ctx.arcTo(x + w, y + h, x + w - r, y + h, r); ctx.lineTo(x + r, y + h);
+            ctx.arcTo(x, y + h, x, y + h - r, r); ctx.lineTo(x, y + r); ctx.arcTo(x, y, x + r, y, r); ctx.fill(); ctx.stroke();
+        }
+
+        // --- 绘制单个烧杯 ---
+        function drawBeaker(b) {
+            ctx.save();
+            makeBeakerPath(b.x, b.y, B_WIDTH, B_HEIGHT, B_RADIUS);
+            ctx.clip(); // 杯内遮罩
+
+            let currentMassVol = b.saltParticles.reduce((sum, p) => sum + p.size * p.size, 0) / 100;
+            let currentWaterH = WATER_BASE_HEIGHT + currentMassVol;
+            let waterY = b.y + B_HEIGHT - currentWaterH;
+
+            // 1. 绘制水
+            if (b.hasWater) {
+                ctx.fillStyle = b.temp === 80 ? 'rgba(255, 160, 150, 0.4)' : 'rgba(100, 200, 255, 0.4)';
+                ctx.fillRect(b.x, waterY, B_WIDTH, currentWaterH);
+                
+                // 剧烈搅拌时的水面波浪
+                let waveOffset = b.stirSpeed > 1 ? Math.sin(Date.now() / 80) * (b.stirSpeed > 5 ? 5 : b.stirSpeed) : 0;
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillRect(b.x, waterY + waveOffset, B_WIDTH, 4);
+
+                // 搅拌水流旋涡特效
+                if (b.stirSpeed > 0.5) {
+                    ctx.save();
+                    ctx.translate(b.x + B_WIDTH/2, b.y + B_HEIGHT - currentWaterH/2);
+                    b.stirAngle += b.stirSpeed * 0.08; 
+                    ctx.rotate(b.stirAngle);
+                    
+                    ctx.strokeStyle = `rgba(255, 255, 255, ${Math.min(b.stirSpeed/15, 0.5)})`;
+                    ctx.lineWidth = 4;
+                    ctx.beginPath(); ctx.ellipse(0, 0, 45, 15, 0, 0, Math.PI * 2); ctx.stroke();
+                    ctx.beginPath(); ctx.ellipse(0, 0, 25, 8, Math.PI/3, 0, Math.PI * 2); ctx.stroke();
+                    ctx.restore();
+                }
+            }
+
+            // 2. 绘制立方体食盐颗粒
+            b.saltParticles.forEach(p => {
+                let s = p.size;
+                let isCoarse = p.originalSize > 6;
+                ctx.fillStyle = isCoarse ? 'rgba(235,235,235,0.9)' : 'rgba(255,255,255,0.95)';
+                ctx.fillRect(p.x - s/2, p.y - s/2, s, s);
+                
+                ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                ctx.fillRect(p.x - s/2, p.y - s/2, s, s/3);
+                
+                ctx.strokeStyle = isCoarse ? 'rgba(120,120,120,0.6)' : 'rgba(180,180,180,0.4)';
+                ctx.lineWidth = 0.5;
+                ctx.strokeRect(p.x - s/2, p.y - s/2, s, s);
+            });
+
+            ctx.restore(); // 结束遮罩
+
+            // 3. 绘制玻璃烧杯外壳
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 5;
+            makeBeakerPath(b.x, b.y, B_WIDTH, B_HEIGHT, B_RADIUS); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(b.x - 5, b.y); ctx.lineTo(b.x + B_WIDTH + 5, b.y); ctx.lineWidth = 4; ctx.stroke();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.3)'; ctx.fillRect(b.x + 10, b.y + 20, 15, B_HEIGHT - 40);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+            for (let i = 1; i <= 4; i++) { ctx.fillRect(b.x + B_WIDTH - 15, b.y + B_HEIGHT - (i * B_HEIGHT * 0.2), 15, 2); }
+
+            // 4. 绘制自动搅拌棒
+            if (b.autoStirring || b.stirSpeed > 0.5) {
+                ctx.save();
+                let time = Date.now() / 150;
+                let rodX = b.x + B_WIDTH/2 + (b.autoStirring ? Math.cos(time) * 20 : 0);
+                
+                // 确保棒子插入水中
+                ctx.translate(rodX, b.y - 20); 
+                if (b.autoStirring) ctx.rotate(Math.sin(time) * 0.15); // 动态倾斜摇晃角度
+
+                ctx.shadowColor = 'rgba(0,0,0,0.3)'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2;
+                let grad = ctx.createLinearGradient(0, 0, 8, 0);
+                grad.addColorStop(0, '#ccc'); grad.addColorStop(0.5, '#fff'); grad.addColorStop(1, '#ccc');
+                
+                ctx.fillStyle = grad; 
+                ctx.beginPath(); 
+                ctx.roundRect(-4, 0, 8, B_HEIGHT + 10, 4); 
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // 5. 数据显示面板 (高度增加以容纳计时器)
+            ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#b2dfdb'; ctx.lineWidth = 2;
+            let panelY = b.y + B_HEIGHT + 20;
+            fillRoundRect(b.x - 10, panelY, B_WIDTH + 20, 125, 8); // 高度从 105 增加到 125
+            
+            ctx.fillStyle = '#004d40'; ctx.font = 'bold 16px "Microsoft YaHei"'; ctx.textAlign = 'center';
+            ctx.fillText(`${b.id}号烧杯`, b.x + B_WIDTH/2, panelY + 22);
+
+            ctx.font = '13px "Microsoft YaHei"'; ctx.textAlign = 'left'; ctx.fillStyle = '#333';
+            let tx = b.x;
+            ctx.fillText(`水况: ${b.hasWater ? '100ml / '+b.temp+'℃' : '空'}`, tx, panelY + 45);
+            
+            ctx.fillText(`搅拌: `, tx, panelY + 65);
+            if (b.autoStirring) {
+                ctx.fillStyle = '#ff9800'; ctx.font = 'bold 13px "Microsoft YaHei"';
+                ctx.fillText(`🔄 自动搅拌中`, tx + 35, panelY + 65);
+            } else {
+                ctx.fillStyle = '#333'; ctx.fillText(`静止`, tx + 35, panelY + 65);
+            }
+            
+            ctx.fillStyle = '#333'; ctx.font = '13px "Microsoft YaHei"';
+            let massRatio = b.initialArea > 0 ? (currentMassVol*100) / b.initialArea : 0;
+            let remainingMass = (b.initialMass * massRatio).toFixed(1);
+            
+            ctx.fillText(`未溶食盐: `, tx, panelY + 85);
+            ctx.fillStyle = '#d32f2f'; ctx.font = 'bold 14px "Microsoft YaHei"';
+            ctx.fillText(`${remainingMass > 0.1 ? remainingMass : '0.0'} g`, tx + 60, panelY + 85);
+
+            // 计时器显示
+            ctx.fillStyle = '#333'; ctx.font = '13px "Microsoft YaHei"';
+            ctx.fillText(`溶解用时: `, tx, panelY + 108);
+            ctx.fillStyle = '#1976d2'; ctx.font = 'bold 14px "Microsoft YaHei"';
+            
+            if (b.initialMass > 0) {
+                if (b.isDissolving) {
+                    ctx.fillText(`${b.elapsedTime.toFixed(1)} s`, tx + 60, panelY + 108);
+                } else {
+                    ctx.fillStyle = '#2e7d32'; // 溶解完成变绿
+                    ctx.fillText(`${b.finishedTime.toFixed(1)} s (完毕)`, tx + 60, panelY + 108);
+                }
+            } else {
+                ctx.fillText(`-`, tx + 60, panelY + 108);
+            }
+        }
+
+        // --- 主渲染循环 ---
+        function renderLoop() {
+            updatePhysics();
+            ctx.clearRect(0, 0, cw, ch);
+            beakers.forEach(drawBeaker);
+            state.steamParticles.forEach(p => {
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fillStyle = `rgba(255, 255, 255, ${p.life * 0.6})`; ctx.fill();
+            });
+            requestAnimationFrame(renderLoop);
+        }
+        requestAnimationFrame(renderLoop);
+
+
+        // ====== 业务交互 UI 逻辑 ======
+        
+        // 1. 加水
+        window.uiAddWater = function(id) {
+            let b = beakers[id-1];
+            if (b.hasWater) { alert(id + "号烧杯已经有水了！"); return; }
+            b.hasWater = true;
+            b.temp = parseInt(document.querySelector('input[name="waterTemp"]:checked').value);
+        }
+
+        // 2. 生成颗粒逻辑
+        function generateSaltParticles(beaker, mass, type) {
+            let totalArea = mass * 350; 
+            let size = type === 'coarse' ? 10 : 4; 
+            let count = Math.floor(totalArea / (size * size));
+
+            beaker.initialMass = (beaker.initialMass || 0) + mass;
+            beaker.initialArea = (beaker.initialArea || 0) + count * (size * size);
+
+            // 启动该烧杯专属的计时器
+            beaker.startTime = Date.now();
+            beaker.elapsedTime = 0;
+            beaker.isDissolving = true;
+
+            for(let i=0; i<count; i++) {
+                beaker.saltParticles.push({
+                    x: beaker.x + 20 + Math.random() * (B_WIDTH - 40),
+                    y: beaker.y - 150 - Math.random() * 200, 
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: Math.random() * 5 + 2,
+                    size: size,
+                    originalSize: size,
+                    targetY: beaker.y + B_HEIGHT - size/2 - Math.random() * (mass * 1.6) 
+                });
+            }
+        }
+
+        // 3. 执行加盐操作 (隐性支持同时加入)
+        window.uiExecuteAddSalt = function() {
+            let t1 = document.getElementById('target-1').checked;
+            let t2 = document.getElementById('target-2').checked;
+
+            if (!t1 && !t2) { alert("请在上方框内至少勾选一个目标烧杯！"); return; }
+
+            // 校验是否符合加盐条件
+            if (t1) {
+                if (!beakers[0].hasWater) { alert("1号杯还没有加水！请先加水。"); return; }
+                if (beakers[0].initialMass > 0) { alert("1号杯已经加入过食盐了，若需重新实验请倒掉重置！"); return; }
+            }
+            if (t2) {
+                if (!beakers[1].hasWater) { alert("2号杯还没有加水！请先加水。"); return; }
+                if (beakers[1].initialMass > 0) { alert("2号杯已经加入过食盐了，若需重新实验请倒掉重置！"); return; }
+            }
+
+            // 执行加盐：如果勾选了两个，代码执行仅有微秒级差异，物理上呈现完全“同时加入、同时开始计时”
+            if (t1) {
+                let mass = parseInt(document.getElementById('mass-1').value);
+                let type = document.querySelector('input[name="type-1"]:checked').value;
+                generateSaltParticles(beakers[0], mass, type);
+            }
+            if (t2) {
+                let mass = parseInt(document.getElementById('mass-2').value);
+                let type = document.querySelector('input[name="type-2"]:checked').value;
+                generateSaltParticles(beakers[1], mass, type);
+            }
+        }
+
+        // 4. 控制自动搅拌状态
+        window.uiToggleStir = function(id) {
+            let b = beakers[id-1];
+            let btn = document.getElementById(`btn-stir-${id}`);
+            
+            b.autoStirring = !b.autoStirring;
+            
+            if (b.autoStirring) {
+                btn.innerText = `${id}号杯：停止搅拌`;
+                btn.style.background = "#d32f2f";
+            } else {
+                btn.innerText = `${id}号杯：开启搅拌`;
+                btn.style.background = "#ff9800";
+            }
+        }
+
+        // 5. 导出记录单为图片
+        window.exportRecordImage = function() {
+            const modalContent = document.getElementById('export-target');
+            const actionsDiv = document.getElementById('modal-actions');
+            const closeBtn = document.querySelector('.close-btn');
+
+            // 截图前隐藏按钮和关闭图标
+            actionsDiv.style.display = 'none';
+            closeBtn.style.display = 'none';
+
+            // 调用 html2canvas，适当增加缩放比例以保证清晰度
+            html2canvas(modalContent, { scale: 2, backgroundColor: "#ffffff" }).then(canvas => {
+                let link = document.createElement('a');
+                link.download = '溶解探究实验记录单.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+
+                // 截图完成后恢复按钮显示
+                actionsDiv.style.display = 'block';
+                closeBtn.style.display = 'block';
+            });
+        }
+    </script>
+</body>
+</html>

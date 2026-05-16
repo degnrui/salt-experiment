@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>食盐溶解速度探究实验 - 终极版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #ecfdf5;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* 拖拽源物品 */
+        .draggable-item {
+            cursor: grab;
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            touch-action: none; 
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px;
+            border: 3px solid transparent;
+        }
+        .draggable-item:hover { transform: translateY(-3px) scale(1.05); }
+        .draggable-item:active { cursor: grabbing; transform: scale(0.95); }
+        .dragging { opacity: 0.6; transform: scale(1.1); z-index: 100; pointer-events: none; }
+
+        /* 已放置的物品 (可再次拖动移除) */
+        .placed-item { transition: transform 0.2s; }
+        .placed-item.can-drag { cursor: grab; }
+        .placed-item.can-drag:hover { transform: translateY(-3px); filter: brightness(0.95); }
+        .placed-item.can-drag:active { cursor: grabbing; transform: scale(0.95); }
+        
+        .drop-zone {
+            transition: all 0.3s ease;
+            min-height: 280px;
+            border: 4px dashed #cbd5e1;
+            background: rgba(255,255,255,0.5);
+            border-radius: 24px;
+        }
+        .drop-zone.drag-over { background-color: #dcfce7; border-color: #22c55e; }
+
+        /* 垃圾桶区 */
+        .trash-zone { transition: all 0.2s; }
+        .trash-zone.drag-over-trash { background-color: #fef2f2; border-color: #ef4444; color: #ef4444; transform: scale(1.02); }
+
+        /* 烧杯视觉 */
+        .beaker-visual {
+            width: 120px;
+            height: 150px;
+            border: 6px solid #94a3b8;
+            border-top: none;
+            border-radius: 0 0 20px 20px;
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.9);
+            margin: 0 auto;
+            overflow: hidden;
+            box-shadow: inset 0 -10px 20px rgba(0,0,0,0.05);
+        }
+        /* 刻度线 */
+        .beaker-visual::before {
+            content: ""; position: absolute; left: 0; top: 15px; bottom: 15px; width: 8px;
+            border-right: 2px solid rgba(148, 163, 184, 0.3);
+            background: repeating-linear-gradient(to bottom, transparent, transparent 24px, rgba(148, 163, 184, 0.6) 24px, rgba(148, 163, 184, 0.6) 26px);
+        }
+        .water-fill {
+            position: absolute; bottom: 0; width: 100%; height: 0; 
+            background-color: transparent; transition: height 0.3s, background-color 0.4s; z-index: 1;
+        }
+        .water-fill.cold { background-color: rgba(56, 189, 248, 0.45); }
+        .water-fill.hot { background-color: rgba(248, 113, 113, 0.45); }
+        
+        /* 称量纸与盐 (放在桌面上) */
+        .weighing-paper {
+            width: 70px; height: 20px;
+            background: #ffffff; border: 1px solid #cbd5e1;
+            border-radius: 50%; position: relative;
+            box-shadow: inset 0 -2px 4px rgba(0,0,0,0.05), 0 2px 2px rgba(0,0,0,0.1);
+        }
+        .salt-fine-visual-paper {
+            position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%);
+            background: #f1f5f9; border-radius: 50% 50% 10% 10%;
+            border: 1px solid #e2e8f0; display: none; transition: all 0.2s;
+        }
+        .crystal {
+            position: absolute; background: #ffffff; border: 1px solid #cbd5e1;
+            border-radius: 1px; box-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+
+        /* 桌面上的搅拌棒 */
+        .resting-rod {
+            width: 70px; height: 8px;
+            background: linear-gradient(to bottom, #f8fafc, #94a3b8, #f8fafc);
+            border-radius: 4px; transform: rotate(-20deg);
+            box-shadow: 2px 3px 3px rgba(0,0,0,0.15);
+        }
+
+        /* 标签与选项 */
+        .tab-btn { border-bottom: 4px solid transparent; opacity: 0.6; }
+        .tab-btn.active { border-bottom-color: #16a34a; color: #16a34a; opacity: 1; background-color: #f0fdf4; }
+
+        .visual-radio input:checked + div {
+            background-color: #3b82f6; color: white; border-color: #2563eb; transform: scale(1.05);
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.3);
+        }
+        .visual-radio div { transition: all 0.2s; }
+
+        /* 成功弹窗 */
+        .result-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 50;
+        }
+
+        /* 错误小提示条 (Toast) */
+        #error-toast { transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    </style>
+</head>
+<body class="text-gray-800 min-h-screen flex flex-col">
+
+    <!-- 顶部错误提示条 (初始隐藏) -->
+    <div id="error-toast" class="fixed top-10 left-1/2 transform -translate-x-1/2 bg-red-500 text-white font-bold px-8 py-4 rounded-full shadow-lg opacity-0 translate-y-[-20px] pointer-events-none z-50 text-xl flex items-center gap-2">
+        <span>🤔</span> 再想想哦
+    </div>
+
+    <header class="bg-green-500 text-white p-3 shadow-md text-center">
+        <h1 class="text-2xl font-black tracking-widest">🧪 溶解实验室</h1>
+    </header>
+
+    <main class="flex-grow flex flex-col p-2 md:p-4 max-w-7xl mx-auto w-full gap-4">
+        
+        <!-- 探究目标选择 -->
+        <div class="bg-white rounded-2xl shadow-sm overflow-hidden flex text-lg font-bold" id="tabs">
+            <button class="tab-btn active flex-1 py-4 px-2 flex flex-col items-center transition-colors" data-tab="stir">
+                <span class="text-3xl mb-1">🔄</span>探究搅拌
+            </button>
+            <button class="tab-btn flex-1 py-4 px-2 flex flex-col items-center transition-colors border-l border-r border-gray-100" data-tab="temp">
+                <span class="text-3xl mb-1">🌡️</span>探究温度
+            </button>
+            <button class="tab-btn flex-1 py-4 px-2 flex flex-col items-center transition-colors" data-tab="size">
+                <span class="text-3xl mb-1">🧂</span>探究颗粒
+            </button>
+        </div>
+
+        <div class="flex-grow flex flex-col md:flex-row gap-4">
+            
+            <!-- 左侧：实验台 -->
+            <div class="md:w-3/5 flex flex-col gap-4">
+                <div class="flex-grow grid sm:grid-cols-2 gap-4">
+                    
+                    <!-- 烧杯 A 区 -->
+                    <div class="drop-zone p-4 relative flex flex-col" id="zone-A" data-zone="A">
+                        <div class="absolute top-4 left-4 bg-gray-800 text-white font-black text-xl w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-20">A</div>
+                        
+                        <!-- 烧杯主体 (可拖动倒水) -->
+                        <div class="flex-grow flex flex-col items-center justify-center mt-6">
+                            <div class="placed-item beaker-wrapper p-2" id="wrapper-water-A" data-source="placed" data-zone="A" data-type="water">
+                                <div class="beaker-visual">
+                                    <div class="water-fill" id="visual-water-A"></div>
+                                </div>
+                            </div>
+                            <div class="text-center text-sm font-bold text-blue-500 mt-1" id="txt-water-A">0 ml</div>
+                        </div>
+
+                        <!-- 桌面物品区 -->
+                        <div class="mt-2 flex justify-around items-end h-20 bg-white/60 rounded-xl p-2 border-t-4 border-gray-200">
+                            <!-- 称量纸与盐 -->
+                            <div class="placed-item flex flex-col items-center justify-end h-full w-20" id="wrapper-salt-A" data-source="placed" data-zone="A" data-type="salt">
+                                <div class="weighing-paper">
+                                    <div class="salt-fine-visual-paper" id="paper-fine-A"></div>
+                                    <div class="w-full h-full relative" id="paper-coarse-A"></div>
+                                </div>
+                                <div class="text-[12px] text-orange-500 font-bold mt-1" id="txt-salt-A">0 g</div>
+                            </div>
+                            <!-- 搅拌棒 -->
+                            <div class="placed-item flex flex-col items-center justify-end h-full w-20" id="wrapper-stir-A" data-source="placed" data-zone="A" data-type="stir" style="display:none;">
+                                <div class="resting-rod mb-2"></div>
+                                <div class="text-[12px] text-purple-600 font-bold">搅拌棒</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 烧杯 B 区 -->
+                    <div class="drop-zone p-4 relative flex flex-col" id="zone-B" data-zone="B">
+                        <div class="absolute top-4 left-4 bg-gray-800 text-white font-black text-xl w-10 h-10 rounded-full flex items-center justify-center shadow-lg z-20">B</div>
+                        
+                        <!-- 烧杯主体 -->
+                        <div class="flex-grow flex flex-col items-center justify-center mt-6">
+                            <div class="placed-item beaker-wrapper p-2" id="wrapper-water-B" data-source="placed" data-zone="B" data-type="water">
+                                <div class="beaker-visual">
+                                    <div class="water-fill" id="visual-water-B"></div>
+                                </div>
+                            </div>
+                            <div class="text-center text-sm font-bold text-blue-500 mt-1" id="txt-water-B">0 ml</div>
+                        </div>
+
+                        <!-- 桌面物品区 -->
+                        <div class="mt-2 flex justify-around items-end h-20 bg-white/60 rounded-xl p-2 border-t-4 border-gray-200">
+                            <!-- 称量纸与盐 -->
+                            <div class="placed-item flex flex-col items-center justify-end h-full w-20" id="wrapper-salt-B" data-source="placed" data-zone="B" data-type="salt">
+                                <div class="weighing-paper">
+                                    <div class="salt-fine-visual-paper" id="paper-fine-B"></div>
+                                    <div class="w-full h-full relative" id="paper-coarse-B"></div>
+                                </div>
+                                <div class="text-[12px] text-orange-500 font-bold mt-1" id="txt-salt-B">0 g</div>
+                            </div>
+                            <!-- 搅拌棒 -->
+                            <div class="placed-item flex flex-col items-center justify-end h-full w-20" id="wrapper-stir-B" data-source="placed" data-zone="B" data-type="stir" style="display:none;">
+                                <div class="resting-rod mb-2"></div>
+                                <div class="text-[12px] text-purple-600 font-bold">搅拌棒</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部垃圾桶区 -->
+                <div id="trash-zone" class="trash-zone border-4 border-dashed border-gray-300 bg-white text-gray-400 rounded-2xl p-4 text-center font-bold flex items-center justify-center shadow-sm">
+                    <span class="text-2xl mr-2">🗑️</span> 拖动烧杯(水) 或 称量纸(盐) 到这里清空
+                </div>
+            </div>
+
+            <!-- 右侧：器材与操作 -->
+            <div class="md:w-2/5 flex flex-col gap-4">
+                
+                <!-- 器材库 -->
+                <div class="bg-white rounded-2xl shadow-sm p-4 flex flex-col border border-gray-100">
+                    <div class="text-center mb-3">
+                        <span class="text-xl font-bold text-gray-700">🎒 拖动器材到工作台</span>
+                        <p class="text-xs text-gray-400 mt-1">搅拌棒拖出工作台即可收回</p>
+                    </div>
+                    <div class="grid grid-cols-3 gap-2" id="inventory"></div>
+                </div>
+
+                <!-- 动态操作时机控制 -->
+                <div class="bg-white rounded-2xl shadow-sm p-4 border border-gray-100 flex-grow">
+                    <h3 class="text-gray-700 font-bold mb-3 text-center">⏳ 操作时机控制</h3>
+                    
+                    <div id="timing-empty-tip" class="text-center text-gray-400 text-sm mt-6">
+                        (放置双份盐或双份搅拌棒后解锁选项)
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <!-- 只有两边都有盐才显示 -->
+                        <div class="bg-gray-50 p-2 rounded-xl" id="salt-timing-control" style="display: none;">
+                            <p class="text-sm font-bold text-gray-500 mb-2 text-center">加盐动作</p>
+                            <div class="flex gap-2">
+                                <label class="flex-1 cursor-pointer visual-radio">
+                                    <input type="radio" name="time-salt" value="same" class="hidden">
+                                    <div class="flex flex-col items-center p-2 border-2 border-gray-200 rounded-lg bg-white">
+                                        <span class="text-xl">🙌</span><span class="font-bold text-xs">同时加盐</span>
+                                    </div>
+                                </label>
+                                <label class="flex-1 cursor-pointer visual-radio">
+                                    <input type="radio" name="time-salt" value="diff" class="hidden">
+                                    <div class="flex flex-col items-center p-2 border-2 border-gray-200 rounded-lg bg-white">
+                                        <span class="text-xl">👆👇</span><span class="font-bold text-xs">先后加盐</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 只有两边都有搅拌棒才显示 -->
+                        <div class="bg-gray-50 p-2 rounded-xl" id="stir-timing-control" style="display: none;">
+                            <p class="text-sm font-bold text-gray-500 mb-2 text-center">搅拌动作</p>
+                            <div class="flex gap-2">
+                                <label class="flex-1 cursor-pointer visual-radio">
+                                    <input type="radio" name="time-stir" value="same" class="hidden">
+                                    <div class="flex flex-col items-center py-2 border-2 border-gray-200 rounded-lg bg-white">
+                                        <span class="text-xl">👯</span><span class="font-bold text-xs">同时搅拌</span>
+                                    </div>
+                                </label>
+                                <label class="flex-1 cursor-pointer visual-radio">
+                                    <input type="radio" name="time-stir" value="diff" class="hidden">
+                                    <div class="flex flex-col items-center py-2 border-2 border-gray-200 rounded-lg bg-white">
+                                        <span class="text-xl">🚶🏃</span><span class="font-bold text-xs">先后搅拌</span>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="check-btn" class="mt-auto bg-green-500 hover:bg-green-600 text-white font-black py-4 rounded-2xl shadow-lg transform transition active:scale-95 text-xl flex justify-center items-center">
+                    <span class="text-2xl mr-2">✅</span> 确认设计
+                </button>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 成功结果弹窗 (只在全对时展示) -->
+    <div id="result-modal" class="result-overlay">
+        <div class="bg-white rounded-3xl p-8 max-w-sm w-full mx-4 shadow-2xl flex flex-col items-center text-center border-t-8 border-green-500">
+            <div class="text-8xl mb-4 animate-bounce">🌟</div>
+            <h2 class="text-3xl font-black mb-4 text-green-500">太棒啦！完全正确 🎉</h2>
+            <p class="text-gray-600 mb-6 font-medium text-lg">这是一个完美的控制变量实验设计！</p>
+            <button id="close-modal" class="bg-gray-800 hover:bg-gray-900 text-white font-bold py-3 px-10 rounded-full w-full text-lg shadow-md transition-transform active:scale-95">
+                继续探究
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const equipmentData = [
+            { id: 'water-cold', type: 'water', value: 'cold', name: '+20ml 冷水', borderColor: 'border-blue-200',
+              svg: `<svg viewBox="0 0 64 64" class="w-10 h-10 drop-shadow-md"><path d="M24 10 L40 10 L40 16 L28 20 L22 50 Q20 58 32 58 Q44 58 42 50 L38 28" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/><path d="M25 24 L22 50 Q20 56 32 56 Q44 56 41 50 L35 34 Z" fill="#38bdf8" opacity="0.6"/><text x="32" y="50" font-size="18" text-anchor="middle">❄️</text></svg>` },
+            { id: 'water-hot', type: 'water', value: 'hot', name: '+20ml 热水', borderColor: 'border-red-200',
+              svg: `<svg viewBox="0 0 64 64" class="w-10 h-10 drop-shadow-md"><path d="M24 10 L40 10 L40 16 L28 20 L22 50 Q20 58 32 58 Q44 58 42 50 L38 28" fill="none" stroke="#94a3b8" stroke-width="4" stroke-linecap="round"/><path d="M25 24 L22 50 Q20 56 32 56 Q44 56 41 50 L35 34 Z" fill="#f87171" opacity="0.6"/><text x="32" y="50" font-size="18" text-anchor="middle">🔥</text></svg>` },
+            { id: 'salt-fine', type: 'salt', value: 'fine', name: '+2g 细盐', borderColor: 'border-gray-200',
+              svg: `<svg viewBox="0 0 64 64" class="w-10 h-10 drop-shadow-md"><rect x="22" y="16" width="20" height="34" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/><rect x="26" y="10" width="12" height="6" rx="2" fill="#94a3b8"/><circle cx="28" cy="24" r="1.5" fill="#94a3b8"/><circle cx="36" cy="24" r="1.5" fill="#94a3b8"/><circle cx="32" cy="30" r="1.5" fill="#94a3b8"/><path d="M26 40 L38 40" stroke="#cbd5e1" stroke-width="2" stroke-linecap="round"/></svg>` },
+            { id: 'salt-coarse', type: 'salt', value: 'coarse', name: '+2g 粗盐', borderColor: 'border-stone-300',
+              svg: `<svg viewBox="0 0 64 64" class="w-10 h-10 drop-shadow-md"><path d="M10 40 Q32 60 54 40 Z" fill="#e2e8f0" stroke="#94a3b8" stroke-width="3"/><rect x="26" y="28" width="10" height="10" rx="1" fill="white" stroke="#94a3b8" stroke-width="2" transform="rotate(15 31 33)"/><rect x="18" y="34" width="8" height="8" rx="1" fill="white" stroke="#94a3b8" stroke-width="2" transform="rotate(-25 22 38)"/></svg>` },
+            { id: 'stir-rod', type: 'stir', value: 'yes', name: '拿搅拌棒', borderColor: 'border-purple-200',
+              svg: `<svg viewBox="0 0 64 64" class="w-10 h-10 drop-shadow-md"><line x1="16" y1="52" x2="48" y2="12" stroke="#cbd5e1" stroke-width="6" stroke-linecap="round"/><circle cx="48" cy="12" r="5" fill="#94a3b8"/></svg>` }
+        ];
+
+        const tableState = {
+            A: { water: { type: null, amount: 0 }, salt: { type: null, amount: 0 }, stir: 'no' },
+            B: { water: { type: null, amount: 0 }, salt: { type: null, amount: 0 }, stir: 'no' }
+        };
+
+        let currentTab = 'stir';
+        const targetMap = { 'stir': 'stir', 'temp': 'water', 'size': 'salt' };
+        let draggedItem = null;
+
+        const inventoryEl = document.getElementById('inventory');
+        const zones = document.querySelectorAll('.drop-zone');
+        const trashZone = document.getElementById('trash-zone');
+        const tabs = document.querySelectorAll('.tab-btn');
+        const checkBtn = document.getElementById('check-btn');
+        const radioSalt = document.getElementsByName('time-salt');
+        const radioStir = document.getElementsByName('time-stir');
+        const modal = document.getElementById('result-modal');
+
+        function renderInventory() {
+            inventoryEl.innerHTML = '';
+            equipmentData.forEach(item => {
+                const el = document.createElement('div');
+                el.className = `draggable-item ${item.borderColor}`;
+                el.draggable = true;
+                el.dataset.source = 'inventory';
+                el.dataset.type = item.type;
+                el.dataset.value = item.value;
+                el.innerHTML = `${item.svg}<span class="text-[12px] font-bold text-gray-600 mt-1">${item.name}</span>`;
+                bindDragEvents(el);
+                inventoryEl.appendChild(el);
+            });
+        }
+
+        // 绑定拖拽事件 (通用于器材库物品 和 桌面物品)
+        function bindDragEvents(el) {
+            el.addEventListener('dragstart', handleDragStart);
+            el.addEventListener('dragend', handleDragEnd);
+            el.addEventListener('touchstart', handleTouchStart, {passive: false});
+            el.addEventListener('touchmove', handleTouchMove, {passive: false});
+            el.addEventListener('touchend', handleTouchEnd);
+        }
+
+        function removeItem(zoneId, type) {
+            if(type === 'water') tableState[zoneId].water = { type: null, amount: 0 };
+            if(type === 'salt') tableState[zoneId].salt = { type: null, amount: 0 };
+            if(type === 'stir') tableState[zoneId].stir = 'no';
+            updateVisuals();
+        }
+
+        function generateCoarseCrystals(container, amount) {
+            container.innerHTML = '';
+            const count = amount * 6; 
+            for(let i=0; i<count; i++) {
+                const crystal = document.createElement('div');
+                crystal.className = 'crystal';
+                const size = 3 + Math.random() * 4;
+                crystal.style.width = `${size}px`;
+                crystal.style.height = `${size}px`;
+                crystal.style.left = `${10 + Math.random() * 80}%`;
+                crystal.style.bottom = `${Math.random() * 6 + amount * 1.5}px`;
+                crystal.style.setProperty('--rot', `${Math.random() * 90}deg`);
+                crystal.style.transform = `rotate(var(--rot))`;
+                container.appendChild(crystal);
+            }
+        }
+
+        function updateVisuals() {
+            ['A', 'B'].forEach(zoneId => {
+                const state = tableState[zoneId];
+                
+                // 1. 烧杯与水
+                const waterWrapper = document.getElementById(`wrapper-water-${zoneId}`);
+                const waterEl = document.getElementById(`visual-water-${zoneId}`);
+                waterEl.className = 'water-fill';
+                if (state.water.amount > 0) {
+                    waterEl.classList.add(state.water.type);
+                    waterEl.style.height = `${state.water.amount * 18}%`;
+                    const typeName = state.water.type === 'cold' ? '冷水' : '热水';
+                    document.getElementById(`txt-water-${zoneId}`).innerHTML = `${state.water.amount * 20} ml (${typeName})`;
+                    waterWrapper.draggable = true;
+                    waterWrapper.classList.add('can-drag');
+                } else {
+                    waterEl.style.height = `0`;
+                    document.getElementById(`txt-water-${zoneId}`).innerHTML = `0 ml`;
+                    waterWrapper.draggable = false;
+                    waterWrapper.classList.remove('can-drag');
+                }
+
+                // 2. 称量纸与盐
+                const saltWrapper = document.getElementById(`wrapper-salt-${zoneId}`);
+                const fineEl = document.getElementById(`paper-fine-${zoneId}`);
+                const coarseContainer = document.getElementById(`paper-coarse-${zoneId}`);
+                
+                fineEl.style.display = 'none';
+                if (state.salt.amount > 0) {
+                    if (state.salt.type === 'fine') {
+                        fineEl.style.display = 'block';
+                        fineEl.style.width = `${40 + state.salt.amount * 10}%`;
+                        fineEl.style.height = `${8 + state.salt.amount * 3}px`;
+                    } else if (state.salt.type === 'coarse') {
+                        if(coarseContainer.children.length === 0) generateCoarseCrystals(coarseContainer, state.salt.amount);
+                    }
+                    const typeName = state.salt.type === 'fine' ? '细盐' : '粗盐';
+                    document.getElementById(`txt-salt-${zoneId}`).innerHTML = `${state.salt.amount * 2} g (${typeName})`;
+                    saltWrapper.draggable = true;
+                    saltWrapper.classList.add('can-drag');
+                } else {
+                    coarseContainer.innerHTML = '';
+                    document.getElementById(`txt-salt-${zoneId}`).innerHTML = `0 g`;
+                    saltWrapper.draggable = false;
+                    saltWrapper.classList.remove('can-drag');
+                }
+
+                // 3. 桌面上的搅拌棒
+                const stirWrapper = document.getElementById(`wrapper-stir-${zoneId}`);
+                if (state.stir === 'yes') {
+                    stirWrapper.style.display = 'flex';
+                    stirWrapper.draggable = true;
+                    stirWrapper.classList.add('can-drag');
+                } else {
+                    stirWrapper.style.display = 'none';
+                    stirWrapper.draggable = false;
+                    stirWrapper.classList.remove('can-drag');
+                }
+            });
+
+            // 动态控制"时机选项"的显示
+            const saltCtrl = document.getElementById('salt-timing-control');
+            const stirCtrl = document.getElementById('stir-timing-control');
+            const emptyTip = document.getElementById('timing-empty-tip');
+
+            // 只有两边都有盐，才需要选加盐时机
+            let showSalt = tableState.A.salt.amount > 0 && tableState.B.salt.amount > 0;
+            // 只有两边都有搅拌棒，才需要选搅拌时机
+            let showStir = tableState.A.stir === 'yes' && tableState.B.stir === 'yes';
+
+            saltCtrl.style.display = showSalt ? 'block' : 'none';
+            stirCtrl.style.display = showStir ? 'block' : 'none';
+            
+            if(!showSalt) radioSalt.forEach(r => r.checked = false);
+            if(!showStir) radioStir.forEach(r => r.checked = false);
+
+            emptyTip.style.display = (!showSalt && !showStir) ? 'block' : 'none';
+        }
+
+        // ---------- 拖拽核心逻辑 ----------
+        function handleDragStart(e) {
+            draggedItem = this;
+            setTimeout(() => this.classList.add('dragging'), 0);
+            e.dataTransfer.effectAllowed = this.dataset.source === 'placed' ? 'move' : 'copy';
+        }
+        function handleDragEnd() {
+            this.classList.remove('dragging');
+            draggedItem = null;
+            zones.forEach(z => z.classList.remove('drag-over'));
+            trashZone.classList.remove('drag-over-trash');
+        }
+
+        // 目标区：实验台 (接收器材库的新增)
+        zones.forEach(zone => {
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                if (draggedItem && draggedItem.dataset.source === 'inventory') {
+                    processDrop(zone.dataset.zone, draggedItem.dataset.type, draggedItem.dataset.value);
+                }
+            });
+        });
+
+        // 目标区：垃圾桶 (接收移除水和盐)
+        trashZone.addEventListener('dragover', e => { e.preventDefault(); trashZone.classList.add('drag-over-trash'); });
+        trashZone.addEventListener('dragleave', () => trashZone.classList.remove('drag-over-trash'));
+        trashZone.addEventListener('drop', e => {
+            e.preventDefault();
+            trashZone.classList.remove('drag-over-trash');
+            if (draggedItem && draggedItem.dataset.source === 'placed') {
+                const type = draggedItem.dataset.type;
+                if (type === 'water' || type === 'salt') {
+                    removeItem(draggedItem.dataset.zone, type);
+                }
+            }
+        });
+
+        // 目标区：任意位置 (用于将搅拌棒丢出工作台)
+        document.addEventListener('dragover', e => e.preventDefault());
+        document.addEventListener('drop', e => {
+            if (draggedItem && draggedItem.dataset.source === 'placed' && draggedItem.dataset.type === 'stir') {
+                const dropZone = e.target.closest('.drop-zone');
+                // 如果没有放在自己的实验区，就视为移除
+                if (!dropZone || dropZone.dataset.zone !== draggedItem.dataset.zone) {
+                    removeItem(draggedItem.dataset.zone, 'stir');
+                }
+            }
+        });
+
+        // ---------- 移动端触摸支持 ----------
+        let touchTarget = null, ghostEl = null;
+        function handleTouchStart(e) {
+            if (!this.draggable) return;
+            touchTarget = this;
+            const touch = e.touches[0];
+            ghostEl = this.cloneNode(true);
+            ghostEl.style.position = 'fixed';
+            ghostEl.style.left = touch.clientX - 30 + 'px';
+            ghostEl.style.top = touch.clientY - 30 + 'px';
+            ghostEl.style.width = '60px';
+            ghostEl.style.opacity = '0.8';
+            ghostEl.style.pointerEvents = 'none'; 
+            ghostEl.style.zIndex = '1000';
+            document.body.appendChild(ghostEl);
+            this.classList.add('dragging');
+        }
+        function handleTouchMove(e) {
+            if (!touchTarget || !ghostEl) return;
+            e.preventDefault(); 
+            const touch = e.touches[0];
+            ghostEl.style.left = touch.clientX - 30 + 'px';
+            ghostEl.style.top = touch.clientY - 30 + 'px';
+            
+            const elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+            zones.forEach(z => z.classList.remove('drag-over'));
+            trashZone.classList.remove('drag-over-trash');
+            
+            if (elBelow) {
+                if(touchTarget.dataset.source === 'inventory') {
+                    const zone = elBelow.closest('.drop-zone');
+                    if (zone) zone.classList.add('drag-over');
+                } else if (touchTarget.dataset.source === 'placed') {
+                    const isTrash = elBelow.closest('#trash-zone');
+                    if (isTrash && (touchTarget.dataset.type === 'water' || touchTarget.dataset.type === 'salt')) {
+                        trashZone.classList.add('drag-over-trash');
+                    }
+                }
+            }
+        }
+        function handleTouchEnd(e) {
+            if (!touchTarget) return;
+            const touch = e.changedTouches[0];
+            const elBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+            
+            if (touchTarget.dataset.source === 'inventory') {
+                if (elBelow) {
+                    const zone = elBelow.closest('.drop-zone');
+                    if (zone) processDrop(zone.dataset.zone, touchTarget.dataset.type, touchTarget.dataset.value);
+                }
+            } else if (touchTarget.dataset.source === 'placed') {
+                const type = touchTarget.dataset.type;
+                const zone = touchTarget.dataset.zone;
+                const isTrash = elBelow && elBelow.closest('#trash-zone');
+                const dropZone = elBelow && elBelow.closest('.drop-zone');
+
+                if (type === 'water' || type === 'salt') {
+                    if (isTrash) removeItem(zone, type);
+                } else if (type === 'stir') {
+                    if (!dropZone || dropZone.dataset.zone !== zone) {
+                        removeItem(zone, 'stir');
+                    }
+                }
+            }
+
+            if (ghostEl) ghostEl.remove();
+            touchTarget.classList.remove('dragging');
+            zones.forEach(z => z.classList.remove('drag-over'));
+            trashZone.classList.remove('drag-over-trash');
+            touchTarget = ghostEl = null;
+        }
+
+        function processDrop(zoneId, type, value) {
+            const state = tableState[zoneId];
+            if(type === 'water') {
+                if(state.water.type === value) {
+                    if(state.water.amount < 5) state.water.amount++;
+                } else {
+                    state.water.type = value; state.water.amount = 1;
+                }
+            } else if(type === 'salt') {
+                document.getElementById(`paper-coarse-${zoneId}`).innerHTML = ''; 
+                if(state.salt.type === value) {
+                    if(state.salt.amount < 5) state.salt.amount++;
+                } else {
+                    state.salt.type = value; state.salt.amount = 1;
+                }
+            } else if(type === 'stir') {
+                state.stir = 'yes';
+            }
+            updateVisuals();
+            const zoneEl = document.getElementById(`zone-${zoneId}`);
+            zoneEl.style.transform = 'scale(1.02)';
+            setTimeout(() => zoneEl.style.transform = 'scale(1)', 150);
+        }
+
+        // 为初始的 placed 元素绑定事件
+        document.querySelectorAll('.placed-item').forEach(el => bindDragEvents(el));
+
+        // 标签切换
+        tabs.forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                tabs.forEach(t => t.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                currentTab = e.currentTarget.dataset.tab;
+                ['A', 'B'].forEach(z => { removeItem(z, 'water'); removeItem(z, 'salt'); removeItem(z, 'stir'); });
+            });
+        });
+
+        // 报错 Toast 动画
+        function showErrorToast() {
+            const toast = document.getElementById('error-toast');
+            toast.classList.remove('opacity-0', 'translate-y-[-20px]', 'pointer-events-none');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-[-20px]', 'pointer-events-none');
+                toast.classList.remove('opacity-100', 'translate-y-0');
+            }, 2000);
+        }
+
+        // 检查逻辑
+        checkBtn.addEventListener('click', () => {
+            const A = tableState.A;
+            const B = tableState.B;
+            
+            // 基础检查：溶解实验必须有水和盐
+            if (A.water.amount === 0 || B.water.amount === 0 || A.salt.amount === 0 || B.salt.amount === 0) {
+                showErrorToast(); return;
+            }
+
+            let showSalt = A.salt.amount > 0 && B.salt.amount > 0;
+            let showStir = A.stir === 'yes' && B.stir === 'yes';
+
+            let saltTime = Array.from(radioSalt).find(r => r.checked)?.value;
+            let stirTime = Array.from(radioStir).find(r => r.checked)?.value;
+
+            // 如果出现选项但没选
+            if (showSalt && !saltTime) { showErrorToast(); return; }
+            if (showStir && !stirTime) { showErrorToast(); return; }
+
+            let isCorrect = true;
+            const targetVar = targetMap[currentTab]; 
+
+            // 1. 定量控制必须完全相同
+            if (A.water.amount !== B.water.amount || A.salt.amount !== B.salt.amount) isCorrect = false;
+
+            // 2. 探究的自变量必须不同，无关变量必须相同
+            if (targetVar === 'water') {
+                if (A.water.type === B.water.type) isCorrect = false; // 自变量不同
+                if (A.salt.type !== B.salt.type || A.stir !== B.stir) isCorrect = false; // 无关变量相同
+            } 
+            else if (targetVar === 'salt') {
+                if (A.salt.type === B.salt.type) isCorrect = false; 
+                if (A.water.type !== B.water.type || A.stir !== B.stir) isCorrect = false; 
+            }
+            else if (targetVar === 'stir') {
+                if (A.stir === B.stir) isCorrect = false; 
+                if (A.water.type !== B.water.type || A.salt.type !== B.salt.type) isCorrect = false; 
+            }
+
+            // 3. 过程控制公平性 (只要选项出现，就必须要求同时)
+            if (showSalt && saltTime !== 'same') isCorrect = false;
+            if (showStir && stirTime !== 'same') isCorrect = false;
+
+            if (isCorrect) {
+                modal.style.display = 'flex';
+            } else {
+                showErrorToast();
+            }
+        });
+
+        document.getElementById('close-modal').addEventListener('click', () => modal.style.display = 'none');
+
+        // 初始化
+        renderInventory();
+        updateVisuals();
+    </script>
+</body>
+</html>

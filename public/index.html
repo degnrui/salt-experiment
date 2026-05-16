@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>进入实验课堂</title>
+  <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="card stack" style="max-width: 480px; margin: 80px auto;">
+      <h1>输入小组码</h1>
+      <p class="muted">请输入教师提供的小组码，进入本组实验页面。</p>
+      <input id="join-code" placeholder="例如 A1K9Q2">
+      <button id="join-btn">进入实验</button>
+      <p id="message" class="bad"></p>
+      <a href="/teacher.html">教师入口</a>
+    </section>
+  </main>
+  <script>
+    document.getElementById('join-btn').addEventListener('click', async () => {
+      const joinCode = document.getElementById('join-code').value.trim();
+      const response = await fetch('/api/student/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ joinCode })
+      });
+      if (!response.ok) {
+        document.getElementById('message').textContent = '小组码无效，请重新输入。';
+        return;
+      }
+      localStorage.setItem('joinCode', joinCode.toUpperCase());
+      location.href = '/student.html';
+    });
+  </script>
+</body>
+</html>
