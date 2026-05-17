@@ -156,6 +156,22 @@ test('deleted classrooms move to trash, block joins, and can be restored', async
   assert.equal((await request(app).post('/api/student/join').send({ joinCode })).status, 200);
 });
 
+test('teachers can permanently delete their own trashed classrooms', async () => {
+  const app = createTestApp();
+  const cookies = await loginTeacher(app);
+  const classroom = await request(app)
+    .post('/api/classrooms')
+    .set('Cookie', cookies)
+    .send({ name: '永久删除课程', groupCount: 1, simulationType: 'salt_dissolution' });
+
+  await request(app).delete(`/api/classrooms/${classroom.body.id}`).set('Cookie', cookies);
+  assert.equal(
+    (await request(app).delete(`/api/classrooms/${classroom.body.id}/permanent`).set('Cookie', cookies)).status,
+    204
+  );
+  assert.deepEqual((await request(app).get('/api/classrooms/trash').set('Cookie', cookies)).body, []);
+});
+
 test('serves student and teacher pages', async () => {
   const app = createTestApp();
 

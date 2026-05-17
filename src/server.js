@@ -272,6 +272,17 @@ function createApp(options = {}) {
     res.json({ ok: true });
   });
 
+  app.delete('/api/classrooms/:id/permanent', requireTeacher, (req, res) => {
+    const classroom = db.prepare(
+      'SELECT * FROM classrooms WHERE id = ? AND teacher_id = ? AND deleted_at IS NOT NULL'
+    ).get(req.params.id, req.teacher.id);
+    if (!classroom) return res.status(404).json({ error: 'not_found' });
+    db.prepare('DELETE FROM submissions WHERE classroom_id = ?').run(classroom.id);
+    db.prepare('DELETE FROM groups WHERE classroom_id = ?').run(classroom.id);
+    db.prepare('DELETE FROM classrooms WHERE id = ?').run(classroom.id);
+    res.status(204).end();
+  });
+
   function purgeExpiredClassrooms() {
     db.prepare(`
       DELETE FROM classrooms

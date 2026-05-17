@@ -139,6 +139,7 @@
       const grid = document.getElementById('course-grid');
       grid.innerHTML = classrooms.map(room => `
         <article class="card course-card" data-id="${room.id}">
+          <button class="danger delete-course" data-id="${room.id}" aria-label="删除课程">删除</button>
           <div>
             <h2>${room.name}</h2>
             <p class="muted">${room.simulationLabel}</p>
@@ -147,7 +148,6 @@
             <span>${room.groupCount} 个小组</span>
             <span>${room.createdAt.slice(0, 10)}</span>
           </div>
-          <button class="danger delete-course" data-id="${room.id}">删除</button>
         </article>
       `).join('') + `<article id="open-create" class="card create-card">＋ 创建新课程</article>`;
       grid.querySelectorAll('.course-card').forEach(card => card.addEventListener('click', () => openClassroom(card.dataset.id)));
@@ -276,12 +276,20 @@
             <strong>${room.name}</strong>
             <p class="muted">已删除，保留 5 天</p>
           </div>
-          <button class="restore-btn" data-id="${room.id}">恢复</button>
+          <div class="row">
+            <button class="restore-btn" data-id="${room.id}">恢复</button>
+            <button class="danger permanent-btn" data-id="${room.id}">彻底删除</button>
+          </div>
         </div>
       `).join('') || '<p class="muted">回收站为空</p>';
       document.querySelectorAll('.restore-btn').forEach(button => button.addEventListener('click', async () => {
         await fetch(`/api/classrooms/${button.dataset.id}/restore`, { method: 'POST' });
         await loadClassrooms();
+        button.closest('.trash-row').remove();
+      }));
+      document.querySelectorAll('.permanent-btn').forEach(button => button.addEventListener('click', async () => {
+        if (!confirm('确认要彻底删除这门课程吗？此操作无法恢复。')) return;
+        await fetch(`/api/classrooms/${button.dataset.id}/permanent`, { method: 'DELETE' });
         button.closest('.trash-row').remove();
       }));
       document.getElementById('trash-modal').classList.add('open');
