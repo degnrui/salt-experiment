@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教师端 Demo</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --line: #dbe3ef;
+      --ink: #162033;
+      --muted: #64748b;
+      --brand: #2563eb;
+      --brand-soft: #dbeafe;
+      --good: #15803d;
+      --bad: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(37, 99, 235, .12), transparent 28%),
+        linear-gradient(180deg, #f8fbff 0%, var(--bg) 100%);
+      font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+    }
+    button, input, select { font: inherit; }
+    .page {
+      min-height: 100vh;
+      padding: 28px;
+    }
+    .center {
+      display: grid;
+      place-items: center;
+    }
+    .card {
+      background: rgba(255,255,255,.94);
+      border: 1px solid rgba(219,227,239,.9);
+      border-radius: 24px;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, .08);
+    }
+    .login {
+      width: min(420px, 100%);
+      padding: 28px;
+      display: grid;
+      gap: 16px;
+    }
+    .login h1, .section-title h1 { margin: 0; }
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+    .field input, .field select {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 13px 14px;
+      background: #fff;
+    }
+    .primary, .ghost {
+      border: 0;
+      border-radius: 14px;
+      padding: 13px 16px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .primary {
+      color: #fff;
+      background: var(--brand);
+    }
+    .ghost {
+      color: var(--ink);
+      background: #eef3f9;
+    }
+    .workspace {
+      max-width: 1220px;
+      margin: 0 auto;
+      display: grid;
+      gap: 22px;
+    }
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      gap: 16px;
+    }
+    .muted { color: var(--muted); }
+    .course-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+    }
+    .course-card {
+      min-height: 180px;
+      padding: 22px;
+      display: grid;
+      gap: 14px;
+      align-content: space-between;
+      cursor: pointer;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .course-card:hover, .create-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 22px 54px rgba(15, 23, 42, .13);
+    }
+    .course-card h2 { margin: 0; }
+    .meta {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pill {
+      background: #eef3f9;
+      border-radius: 999px;
+      padding: 7px 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .create-card {
+      min-height: 180px;
+      border: 2px dashed #bfd0ea;
+      background: rgba(255,255,255,.65);
+      display: grid;
+      place-items: center;
+      color: var(--brand);
+      cursor: pointer;
+      font-weight: 800;
+      font-size: 22px;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 14px;
+    }
+    .stat {
+      padding: 18px;
+    }
+    .stat strong {
+      display: block;
+      margin-top: 8px;
+      font-size: 30px;
+    }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 16px;
+    }
+    .panel {
+      padding: 20px;
+    }
+    .panel h2 { margin-top: 0; }
+    .task-row, .error-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 1px solid #edf2f7;
+    }
+    .groups {
+      display: grid;
+      gap: 14px;
+    }
+    details {
+      overflow: hidden;
+    }
+    summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: center;
+    }
+    summary::-webkit-details-marker { display: none; }
+    .group-body {
+      padding: 0 20px 20px;
+      display: grid;
+      gap: 18px;
+    }
+    .group-summary {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .error-badge {
+      color: var(--bad);
+      background: #fee2e2;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 14px;
+    }
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .mini {
+      padding: 14px;
+      border-radius: 16px;
+      background: #f8fafc;
+    }
+    .task-section {
+      border: 1px solid;
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .task-section h3 {
+      margin: 0;
+      padding: 14px 16px;
+    }
+    .task-section table {
+      background: #fff;
+    }
+    .task-stir {
+      border-color: #bfdbfe;
+      background: #eff6ff;
+    }
+    .task-stir h3 {
+      color: #1d4ed8;
+      background: #dbeafe;
+    }
+    .task-temp {
+      border-color: #fed7aa;
+      background: #fff7ed;
+    }
+    .task-temp h3 {
+      color: #c2410c;
+      background: #ffedd5;
+    }
+    .task-size {
+      border-color: #bbf7d0;
+      background: #f0fdf4;
+    }
+    .task-size h3 {
+      color: #15803d;
+      background: #dcfce7;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 12px 10px;
+      border-bottom: 1px solid #e5edf6;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .ok { color: var(--good); font-weight: 700; }
+    .bad { color: var(--bad); font-weight: 700; }
+    .wrong {
+      color: var(--bad);
+      font-weight: 800;
+    }
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, .35);
+    }
+    .modal.open { display: grid; }
+    .dialog {
+      width: min(460px, 100%);
+      padding: 24px;
+      display: grid;
+      gap: 16px;
+    }
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+    @media (max-width: 760px) {
+      .page { padding: 16px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      summary { align-items: flex-start; flex-direction: column; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main id="login-view" class="page center">
+    <section class="card login">
+      <div>
+        <h1>教师登录</h1>
+        <p class="muted">登录后进入课程空间</p>
+      </div>
+      <label class="field">
+        <span>用户名</span>
+        <input value="teacher">
+      </label>
+      <label class="field">
+        <span>密码</span>
+        <input type="password" value="teacher123">
+      </label>
+      <button class="primary" id="login-btn">登录</button>
+    </section>
+  </main>
+
+  <main id="workspace-view" class="page" hidden>
+    <section class="workspace">
+      <header class="section-title">
+        <div>
+          <p class="muted">教师端</p>
+          <h1>课程空间</h1>
+        </div>
+      </header>
+      <section class="course-grid">
+        <article class="card course-card" data-course="salt">
+          <div>
+            <h2>五年级一班</h2>
+            <p class="muted">食盐溶解实验</p>
+          </div>
+          <div class="meta">
+            <span class="pill">5 个小组</span>
+            <span class="pill">创建于 2026/05/17</span>
+          </div>
+        </article>
+        <article class="card course-card" data-course="salt">
+          <div>
+            <h2>五年级二班</h2>
+            <p class="muted">食盐溶解实验</p>
+          </div>
+          <div class="meta">
+            <span class="pill">6 个小组</span>
+            <span class="pill">创建于 2026/05/16</span>
+          </div>
+        </article>
+        <article class="card create-card" id="open-create">＋ 创建新课程</article>
+      </section>
+    </section>
+  </main>
+
+  <main id="detail-view" class="page" hidden>
+    <section class="workspace">
+      <header class="section-title">
+        <div>
+          <button class="ghost" id="back-btn">← 返回课程空间</button>
+          <p class="muted">食盐溶解实验</p>
+          <h1>五年级一班</h1>
+        </div>
+      </header>
+
+      <section class="stats">
+        <article class="card stat"><span class="muted">总提交数</span><strong>18</strong></article>
+        <article class="card stat"><span class="muted">正确提交数</span><strong>9</strong></article>
+        <article class="card stat"><span class="muted">正确率</span><strong>50%</strong></article>
+      </section>
+
+      <section class="detail-grid">
+        <article class="card panel">
+          <h2>按探究任务统计</h2>
+          <div class="task-row"><span>探究搅拌</span><strong>4 / 6 正确</strong></div>
+          <div class="task-row"><span>探究温度</span><strong>3 / 6 正确</strong></div>
+          <div class="task-row"><span>探究颗粒</span><strong>2 / 6 正确</strong></div>
+        </article>
+        <article class="card panel">
+          <h2>全班错误统计</h2>
+          <div class="error-row"><span>无关变量没有控制一致</span><strong>5 次</strong></div>
+          <div class="error-row"><span>探究变量没有形成对比</span><strong>3 次</strong></div>
+          <div class="error-row"><span>加盐时机不一致</span><strong>2 次</strong></div>
+        </article>
+      </section>
+
+      <section class="groups">
+        <details class="card">
+          <summary>
+            <div>
+              <strong>小组1</strong>
+              <span class="muted">小组码 A1K9Q2</span>
+            </div>
+            <div class="group-summary">
+              <span class="error-badge">无关变量没有控制一致 2 次</span>
+              <span class="error-badge">加盐时机不一致 1 次</span>
+            </div>
+          </summary>
+          <div class="group-body">
+            <div class="mini-grid">
+              <div class="mini">
+                <strong>探究搅拌</strong>
+                <p>无关变量没有控制一致 2 次</p>
+              </div>
+              <div class="mini">
+                <strong>探究温度</strong>
+                <p>加盐时机不一致 1 次</p>
+              </div>
+              <div class="mini">
+                <strong>探究颗粒</strong>
+                <p>暂无错误</p>
+              </div>
+            </div>
+            <section class="task-section task-stir">
+              <h3>探究搅拌</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>提交时间</th>
+                    <th>A 杯设计</th>
+                    <th>B 杯设计</th>
+                    <th>加盐时机</th>
+                    <th>搅拌时机</th>
+                    <th>判定结果</th>
+                    <th>错误原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>09:12:10</td>
+                    <td><span class="wrong">冷水</span> 40ml，细盐 4g，搅拌：是</td>
+                    <td><span class="wrong">热水</span> 40ml，细盐 4g，搅拌：否</td>
+                    <td>同时</td>
+                    <td>-</td>
+                    <td class="bad">错误</td>
+                    <td>无关变量没有控制一致</td>
+                  </tr>
+                  <tr>
+                    <td>09:15:42</td>
+                    <td>冷水 40ml，细盐 4g，搅拌：是</td>
+                    <td>冷水 40ml，细盐 4g，搅拌：否</td>
+                    <td>同时</td>
+                    <td>-</td>
+                    <td class="ok">正确</td>
+                    <td>-</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="task-section task-temp">
+              <h3>探究温度</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>提交时间</th>
+                    <th>A 杯设计</th>
+                    <th>B 杯设计</th>
+                    <th>加盐时机</th>
+                    <th>搅拌时机</th>
+                    <th>判定结果</th>
+                    <th>错误原因</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>09:18:20</td>
+                    <td><span class="wrong">冷水</span> 40ml，细盐 4g，搅拌：否</td>
+                    <td><span class="wrong">冷水</span> 40ml，细盐 4g，搅拌：否</td>
+                    <td><span class="wrong">先后</span></td>
+                    <td>-</td>
+                    <td class="bad">错误</td>
+                    <td>探究变量没有形成对比；加盐时机不一致</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="task-section task-size">
+              <h3>探究颗粒</h3>
+              <table>
+                <tbody>
+                  <tr>
+                    <td class="muted">暂无提交记录</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </div>
+        </details>
+
+        <details class="card">
+          <summary>
+            <div>
+              <strong>小组2</strong>
+              <span class="muted">小组码 B7Q2M8</span>
+            </div>
+            <div class="group-summary">
+              <span class="error-badge">探究变量没有形成对比 1 次</span>
+            </div>
+          </summary>
+          <div class="group-body">
+            <div class="mini-grid">
+              <div class="mini"><strong>探究搅拌</strong><p>暂无错误</p></div>
+              <div class="mini"><strong>探究温度</strong><p>探究变量没有形成对比 1 次</p></div>
+              <div class="mini"><strong>探究颗粒</strong><p>暂无错误</p></div>
+            </div>
+            <table>
+              <tbody>
+                <tr>
+                  <td>暂无更多记录</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </section>
+    </section>
+  </main>
+
+  <div class="modal" id="create-modal">
+    <section class="card dialog">
+      <div>
+        <h2>创建新课程</h2>
+        <p class="muted">快速生成新的课堂空间</p>
+      </div>
+      <label class="field">
+        <span>课程名称</span>
+        <input placeholder="例如 五年级三班">
+      </label>
+      <label class="field">
+        <span>分组数量</span>
+        <input type="number" value="5" min="1" max="20">
+      </label>
+      <label class="field">
+        <span>使用的 simulation</span>
+        <select>
+          <option>食盐溶解实验</option>
+        </select>
+      </label>
+      <div class="dialog-actions">
+        <button class="ghost" id="close-create">取消</button>
+        <button class="primary">创建课程</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const loginView = document.getElementById('login-view');
+    const workspaceView = document.getElementById('workspace-view');
+    const detailView = document.getElementById('detail-view');
+    const modal = document.getElementById('create-modal');
+
+    document.getElementById('login-btn').addEventListener('click', () => {
+      loginView.hidden = true;
+      workspaceView.hidden = false;
+    });
+    document.querySelectorAll('.course-card').forEach(card => {
+      card.addEventListener('click', () => {
+        workspaceView.hidden = true;
+        detailView.hidden = false;
+      });
+    });
+    document.getElementById('back-btn').addEventListener('click', () => {
+      detailView.hidden = true;
+      workspaceView.hidden = false;
+    });
+    document.getElementById('open-create').addEventListener('click', () => modal.classList.add('open'));
+    document.getElementById('close-create').addEventListener('click', () => modal.classList.remove('open'));
+    modal.addEventListener('click', event => {
+      if (event.target === modal) modal.classList.remove('open');
+    });
+  </script>
+</body>
+</html>

@@ -3,128 +3,242 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>教师看板</title>
+  <title>教师课程空间</title>
   <link rel="stylesheet" href="/app.css">
 </head>
-<body>
-  <main class="shell stack">
-    <section class="card stack" id="login-card">
-      <h1>教师看板</h1>
-      <div class="row">
-        <input id="username" value="teacher" placeholder="用户名">
-        <input id="password" type="password" value="teacher123" placeholder="密码">
-        <button id="login-btn">登录</button>
-      </div>
-    </section>
-
-    <section class="card stack" id="classroom-card" hidden>
-      <h2>创建课堂</h2>
-      <div class="row">
-        <input id="classroom-name" placeholder="课堂名称">
-        <input id="group-count" type="number" min="1" max="20" value="5">
-        <button id="create-btn">创建课堂</button>
-      </div>
-      <select id="classroom-select"></select>
-      <div id="codes"></div>
-    </section>
-
-    <section class="stack" id="dashboard" hidden>
-      <div class="grid stats" id="summary"></div>
-      <div class="card">
-        <h2>按任务统计</h2>
-        <div id="tasks"></div>
-      </div>
-      <div class="card">
-        <h2>错误统计</h2>
-        <div id="errors"></div>
-      </div>
-      <div class="card">
-        <h2>各组提交历史</h2>
-        <div id="groups"></div>
-      </div>
+<body class="teacher-body">
+  <main id="login-view" class="teacher-page center-view">
+    <section class="card login-panel">
+      <h1>教师登录</h1>
+      <p class="muted">登录后进入课程空间</p>
+      <input id="username" value="teacher" placeholder="用户名">
+      <input id="password" type="password" value="teacher123" placeholder="密码">
+      <button id="login-btn">登录</button>
+      <p id="login-error" class="bad"></p>
     </section>
   </main>
+
+  <main id="workspace-view" class="teacher-page" hidden>
+    <section class="teacher-shell">
+      <header>
+        <p class="muted">教师端</p>
+        <h1>课程空间</h1>
+      </header>
+      <section id="course-grid" class="course-grid"></section>
+    </section>
+  </main>
+
+  <main id="detail-view" class="teacher-page" hidden>
+    <section class="teacher-shell">
+      <header class="detail-header">
+        <button id="back-btn" class="secondary">← 返回课程空间</button>
+        <p id="detail-simulation" class="muted"></p>
+        <h1 id="detail-title"></h1>
+      </header>
+      <section id="summary" class="teacher-stats"></section>
+      <section class="teacher-detail-grid">
+        <article class="card panel">
+          <h2>按探究任务统计</h2>
+          <div id="tasks"></div>
+        </article>
+        <article class="card panel">
+          <h2>全班错误统计</h2>
+          <div id="errors"></div>
+        </article>
+      </section>
+      <section id="groups" class="group-list"></section>
+    </section>
+  </main>
+
+  <div id="create-modal" class="modal">
+    <section class="card modal-panel">
+      <h2>创建新课程</h2>
+      <label>课程名称 <input id="classroom-name" placeholder="例如 五年级三班"></label>
+      <label>分组数量 <input id="group-count" type="number" min="1" max="20" value="5"></label>
+      <label>使用的 simulation
+        <select id="simulation-type">
+          <option value="salt_dissolution">食盐溶解实验</option>
+        </select>
+      </label>
+      <div class="row end">
+        <button id="close-create" class="secondary">取消</button>
+        <button id="create-btn">创建课程</button>
+      </div>
+    </section>
+  </div>
+
   <script>
+    const labels = {
+      tasks: { stir: '探究搅拌', temp: '探究温度', size: '探究颗粒' },
+      water: { cold: '冷水', hot: '热水' },
+      salt: { fine: '细盐', coarse: '粗盐' },
+      stir: { yes: '是', no: '否' },
+      timing: { same: '同时', diff: '先后' }
+    };
     let currentClassroomId = null;
+    let expandedGroups = new Set();
+
+    function show(view) {
+      ['login-view', 'workspace-view', 'detail-view'].forEach(id => {
+        document.getElementById(id).hidden = id !== view;
+      });
+    }
+
+    function beakerText(beaker, highlighted = {}) {
+      const water = `${labels.water[beaker.water.type] || '-'} ${beaker.water.amount * 20}ml`;
+      const salt = `${labels.salt[beaker.salt.type] || '-'} ${beaker.salt.amount * 2}g`;
+      const stir = `搅拌：${labels.stir[beaker.stir]}`;
+      return [
+        highlighted.water ? `<span class="wrong">${water}</span>` : water,
+        highlighted.salt ? `<span class="wrong">${salt}</span>` : salt,
+        highlighted.stir ? `<span class="wrong">${stir}</span>` : stir
+      ].join('，');
+    }
+
+    function highlightsFor(item) {
+      const a = {}, b = {};
+      if (item.errorTypes.includes('control_variables_mismatch')) {
+        if (item.taskType === 'stir') {
+          if (item.beakerA.water.type !== item.beakerB.water.type) a.water = b.water = true;
+          if (item.beakerA.salt.type !== item.beakerB.salt.type) a.salt = b.salt = true;
+        }
+        if (item.taskType === 'temp') {
+          if (item.beakerA.salt.type !== item.beakerB.salt.type) a.salt = b.salt = true;
+          if (item.beakerA.stir !== item.beakerB.stir) a.stir = b.stir = true;
+        }
+        if (item.taskType === 'size') {
+          if (item.beakerA.water.type !== item.beakerB.water.type) a.water = b.water = true;
+          if (item.beakerA.stir !== item.beakerB.stir) a.stir = b.stir = true;
+        }
+      }
+      if (item.errorTypes.includes('target_not_varied')) {
+        if (item.taskType === 'stir') a.stir = b.stir = true;
+        if (item.taskType === 'temp') a.water = b.water = true;
+        if (item.taskType === 'size') a.salt = b.salt = true;
+      }
+      if (item.errorTypes.includes('unequal_quantities')) {
+        if (item.beakerA.water.amount !== item.beakerB.water.amount) a.water = b.water = true;
+        if (item.beakerA.salt.amount !== item.beakerB.salt.amount) a.salt = b.salt = true;
+      }
+      return { a, b };
+    }
 
     async function loadClassrooms() {
       const classrooms = await fetch('/api/classrooms').then(response => response.json());
-      const select = document.getElementById('classroom-select');
-      select.innerHTML = classrooms.map(room => `<option value="${room.id}">${room.name}</option>`).join('');
-      if (classrooms[0]) {
-        currentClassroomId = classrooms[0].id;
-        loadDashboard();
-      }
+      const grid = document.getElementById('course-grid');
+      grid.innerHTML = classrooms.map(room => `
+        <article class="card course-card" data-id="${room.id}">
+          <div>
+            <h2>${room.name}</h2>
+            <p class="muted">${room.simulationLabel}</p>
+          </div>
+          <div class="meta">
+            <span>${room.groupCount} 个小组</span>
+            <span>${room.createdAt.slice(0, 10)}</span>
+          </div>
+        </article>
+      `).join('') + `<article id="open-create" class="card create-card">＋ 创建新课程</article>`;
+      grid.querySelectorAll('.course-card').forEach(card => card.addEventListener('click', () => openClassroom(card.dataset.id)));
+      document.getElementById('open-create').addEventListener('click', () => document.getElementById('create-modal').classList.add('open'));
     }
 
-    async function loadDashboard() {
-      if (!currentClassroomId) return;
-      const data = await fetch(`/api/classrooms/${currentClassroomId}/dashboard`).then(response => response.json());
-      document.getElementById('dashboard').hidden = false;
+    function renderErrorStats(stats) {
+      const rows = Object.entries(stats).filter(([, count]) => count > 0);
+      return rows.length
+        ? rows.map(([key, count]) => `<div class="stat-row"><span>${window.dashboard.errorLabels[key]}</span><strong>${count} 次</strong></div>`).join('')
+        : '<p class="muted">暂无错误</p>';
+    }
+
+    function renderTaskTable(taskType, submissions) {
+      return `
+        <section class="task-section task-${taskType}">
+          <h3>${labels.tasks[taskType]}</h3>
+          <table>
+            <thead><tr><th>提交时间</th><th>A 杯设计</th><th>B 杯设计</th><th>加盐时机</th><th>搅拌时机</th><th>判定结果</th><th>错误原因</th></tr></thead>
+            <tbody>
+              ${submissions.map(item => {
+                const marked = highlightsFor(item);
+                return `<tr>
+                  <td>${item.submittedAt}</td>
+                  <td>${beakerText(item.beakerA, marked.a)}</td>
+                  <td>${beakerText(item.beakerB, marked.b)}</td>
+                  <td class="${item.errorTypes.includes('salt_timing_mismatch') ? 'wrong' : ''}">${labels.timing[item.saltTiming] || '-'}</td>
+                  <td class="${item.errorTypes.includes('stir_timing_mismatch') ? 'wrong' : ''}">${labels.timing[item.stirTiming] || '-'}</td>
+                  <td class="${item.isCorrect ? 'ok' : 'bad'}">${item.isCorrect ? '正确' : '错误'}</td>
+                  <td>${item.errorLabels.join('、') || '-'}</td>
+                </tr>`;
+              }).join('') || '<tr><td colspan="7" class="muted">暂无提交记录</td></tr>'}
+            </tbody>
+          </table>
+        </section>`;
+    }
+
+    async function openClassroom(id) {
+      currentClassroomId = id;
+      const data = await fetch(`/api/classrooms/${id}/dashboard`).then(response => response.json());
+      window.dashboard = data;
+      document.getElementById('detail-title').textContent = data.classroom.name;
+      document.getElementById('detail-simulation').textContent = data.classroom.simulationLabel;
       document.getElementById('summary').innerHTML = `
-        <div class="card stat"><span>总提交数</span><strong>${data.summary.totalSubmissions}</strong></div>
-        <div class="card stat"><span>正确提交数</span><strong>${data.summary.correctSubmissions}</strong></div>
-        <div class="card stat"><span>正确率</span><strong>${Math.round(data.summary.correctRate * 100)}%</strong></div>
-      `;
+        <article class="card stat"><span>总提交数</span><strong>${data.summary.totalSubmissions}</strong></article>
+        <article class="card stat"><span>正确提交数</span><strong>${data.summary.correctSubmissions}</strong></article>
+        <article class="card stat"><span>正确率</span><strong>${Math.round(data.summary.correctRate * 100)}%</strong></article>`;
       document.getElementById('tasks').innerHTML = Object.entries(data.taskStats)
-        .map(([task, stat]) => `<p>${task}：${stat.correct}/${stat.total}，正确率 ${Math.round(stat.correctRate * 100)}%</p>`)
-        .join('');
-      document.getElementById('errors').innerHTML = Object.entries(data.errorCounts)
-        .map(([key, value]) => `<p>${data.errorLabels[key]}：${value}</p>`).join('');
-      document.getElementById('groups').innerHTML = data.groups.map(group => `
-        <section class="history">
-          <h3>${group.name} <span class="muted">${group.joinCode}</span></h3>
-          ${group.submissions.map(item => `
-            <p>
-              ${item.submittedAt} · ${item.taskType} ·
-              <span class="${item.isCorrect ? 'ok' : 'bad'}">${item.isCorrect ? '正确' : item.errorLabels.join('、')}</span>
-            </p>
-            <p class="muted">
-              A：${item.beakerA.water.type}/${item.beakerA.water.amount}，${item.beakerA.salt.type}/${item.beakerA.salt.amount}，搅拌 ${item.beakerA.stir}
-              | B：${item.beakerB.water.type}/${item.beakerB.water.amount}，${item.beakerB.salt.type}/${item.beakerB.salt.amount}，搅拌 ${item.beakerB.stir}
-              | 加盐 ${item.saltTiming || '-'}，搅拌 ${item.stirTiming || '-'}
-            </p>
-          `).join('') || '<p class="muted">尚无提交</p>'}
-        </section>
-      `).join('');
+        .map(([task, stat]) => `<div class="stat-row"><span>${labels.tasks[task]}</span><strong>${stat.correct} / ${stat.total} 正确</strong></div>`).join('');
+      document.getElementById('errors').innerHTML = renderErrorStats(data.errorCounts);
+      document.getElementById('groups').innerHTML = data.groups.map(group => {
+        const allErrors = {};
+        Object.values(group.errorStatsByTask).forEach(taskStats => Object.entries(taskStats).forEach(([key, count]) => {
+          allErrors[key] = (allErrors[key] || 0) + count;
+        }));
+        return `<details class="card group-card" data-group="${group.id}" ${expandedGroups.has(String(group.id)) ? 'open' : ''}>
+          <summary>
+            <div><strong>${group.name}</strong> <span class="muted">小组码 ${group.joinCode}</span></div>
+            <div class="badges">${Object.entries(allErrors).map(([key, count]) => `<span>${data.errorLabels[key]} ${count} 次</span>`).join('') || '<span class="ok-badge">暂无错误</span>'}</div>
+          </summary>
+          <div class="group-body">
+            <div class="mini-grid">${Object.entries(group.errorStatsByTask).map(([task, stats]) => `<article><strong>${labels.tasks[task]}</strong>${renderErrorStats(stats)}</article>`).join('')}</div>
+            ${['stir', 'temp', 'size'].map(task => renderTaskTable(task, group.submissions.filter(item => item.taskType === task))).join('')}
+          </div>
+        </details>`;
+      }).join('');
+      document.querySelectorAll('.group-card').forEach(card => card.addEventListener('toggle', () => {
+        if (card.open) expandedGroups.add(card.dataset.group);
+        else expandedGroups.delete(card.dataset.group);
+      }));
+      show('detail-view');
     }
 
     document.getElementById('login-btn').addEventListener('click', async () => {
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: document.getElementById('username').value,
-          password: document.getElementById('password').value
-        })
+        body: JSON.stringify({ username: username.value, password: password.value })
       });
-      if (!response.ok) return alert('登录失败');
-      document.getElementById('classroom-card').hidden = false;
-      loadClassrooms();
+      if (!response.ok) {
+        document.getElementById('login-error').textContent = '登录失败';
+        return;
+      }
+      await loadClassrooms();
+      show('workspace-view');
     });
-
     document.getElementById('create-btn').addEventListener('click', async () => {
-      const classroom = await fetch('/api/classrooms', {
+      const response = await fetch('/api/classrooms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: document.getElementById('classroom-name').value,
-          groupCount: Number(document.getElementById('group-count').value)
+          groupCount: Number(document.getElementById('group-count').value),
+          simulationType: document.getElementById('simulation-type').value
         })
-      }).then(response => response.json());
-      document.getElementById('codes').innerHTML = classroom.groups
-        .map(group => `<p>${group.name}：<strong>${group.joinCode}</strong></p>`).join('');
-      currentClassroomId = classroom.id;
+      });
+      if (!response.ok) return;
+      document.getElementById('create-modal').classList.remove('open');
       await loadClassrooms();
-      await loadDashboard();
     });
-
-    document.getElementById('classroom-select').addEventListener('change', event => {
-      currentClassroomId = event.target.value;
-      loadDashboard();
-    });
-
-    setInterval(loadDashboard, 5000);
+    document.getElementById('close-create').addEventListener('click', () => document.getElementById('create-modal').classList.remove('open'));
+    document.getElementById('back-btn').addEventListener('click', () => show('workspace-view'));
+    setInterval(() => currentClassroomId && !document.getElementById('detail-view').hidden && openClassroom(currentClassroomId), 5000);
   </script>
 </body>
 </html>

@@ -23,10 +23,12 @@ test('teacher can create classroom and student can submit through group code', a
   const classroom = await request(app)
     .post('/api/classrooms')
     .set('Cookie', cookies)
-    .send({ name: '五年级一班', groupCount: 2 });
+    .send({ name: '五年级一班', groupCount: 2, simulationType: 'salt_dissolution' });
 
   assert.equal(classroom.status, 201);
   assert.equal(classroom.body.groups.length, 2);
+  assert.equal(classroom.body.simulationType, 'salt_dissolution');
+  assert.equal(classroom.body.simulationLabel, '食盐溶解实验');
 
   const join = await request(app)
     .post('/api/student/join')
@@ -85,6 +87,25 @@ test('dashboard aggregates submissions and error counts', async () => {
   assert.equal(dashboard.body.summary.correctRate, 0);
   assert.equal(dashboard.body.errorCounts.unequal_quantities, 1);
   assert.equal(dashboard.body.groups[0].submissions.length, 1);
+  assert.equal(dashboard.body.groups[0].errorStatsByTask.stir.unequal_quantities, 1);
+});
+
+test('classroom list includes display metadata for the course workspace', async () => {
+  const app = createTestApp();
+  const cookies = await loginTeacher(app);
+  await request(app)
+    .post('/api/classrooms')
+    .set('Cookie', cookies)
+    .send({ name: '五年级三班', groupCount: 5, simulationType: 'salt_dissolution' });
+
+  const classrooms = await request(app)
+    .get('/api/classrooms')
+    .set('Cookie', cookies);
+
+  assert.equal(classrooms.status, 200);
+  assert.equal(classrooms.body[0].simulationType, 'salt_dissolution');
+  assert.equal(classrooms.body[0].simulationLabel, '食盐溶解实验');
+  assert.equal(classrooms.body[0].groupCount, 5);
 });
 
 test('serves student and teacher pages', async () => {
@@ -93,5 +114,8 @@ test('serves student and teacher pages', async () => {
   assert.equal((await request(app).get('/')).status, 200);
   assert.match((await request(app).get('/')).text, /输入小组码/);
   assert.match((await request(app).get('/student.html')).text, /确认设计/);
-  assert.match((await request(app).get('/teacher.html')).text, /教师看板/);
+  const teacherPage = await request(app).get('/teacher.html');
+  assert.match(teacherPage.text, /课程空间/);
+  assert.match(teacherPage.text, /create-modal/);
+  assert.match(teacherPage.text, /detail-view/);
 });

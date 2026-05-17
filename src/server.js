@@ -13,6 +13,21 @@ const errorLabels = {
   salt_timing_mismatch: '加盐时机不一致',
   stir_timing_mismatch: '搅拌时机不一致'
 };
+const simulationLabels = {
+  salt_dissolution: '食盐溶解实验'
+};
+const taskTypes = ['stir', 'temp', 'size'];
+
+function presentClassroom(row, groupCount = 0) {
+  return {
+    id: row.id,
+    name: row.name,
+    simulationType: row.simulation_type,
+    simulationLabel: simulationLabels[row.simulation_type] || row.simulation_type,
+    groupCount,
+    createdAt: row.created_at
+  };
+}
 
 function createApp(options = {}) {
   const db = createDb(options.dbPath || path.join(__dirname, '..', 'data.sqlite'));
@@ -45,12 +60,13 @@ function createApp(options = {}) {
   app.post('/api/classrooms', requireTeacher, (req, res) => {
     const name = String(req.body.name || '').trim();
     const groupCount = Number(req.body.groupCount || 0);
-    if (!name || groupCount < 1 || groupCount > 20) {
+    const simulationType = req.body.simulationType || 'salt_dissolution';
+    if (!name || groupCount < 1 || groupCount > 20 || !simulationLabels[simulationType]) {
       return res.status(400).json({ error: 'invalid_classroom' });
     }
     const classroom = db.prepare(
-      'INSERT INTO classrooms (teacher_id, name) VALUES (?, ?) RETURNING *'
-    ).get(req.teacher.id, name);
+      'INSERT INTO classrooms (teacher_id, name, simulation_type) VALUES (?, ?, ?) RETURNING *'
+    ).get(req.teacher.id, name, simulationType);
     const insertGroup = db.prepare(
       'INSERT INTO groups (classroom_id, name, join_code) VALUES (?, ?, ?) RETURNING *'
     );
@@ -64,14 +80,19 @@ function createApp(options = {}) {
         joinCode: group.join_code
       });
     }
-    res.status(201).json({ ...classroom, groups });
+    res.status(201).json({ ...presentClassroom(classroom, groups.length), groups });
   });
 
   app.get('/api/classrooms', requireTeacher, (req, res) => {
     const rows = db.prepare(
-      'SELECT * FROM classrooms WHERE teacher_id = ? ORDER BY created_at DESC, id DESC'
+      `SELECT c.*, COUNT(g.id) AS group_count
+       FROM classrooms c
+       LEFT JOIN groups g ON g.classroom_id = c.id
+       WHERE c.teacher_id = ?
+       GROUP BY c.id
+       ORDER BY c.created_at DESC, c.id DESC`
     ).all(req.teacher.id);
-    res.json(rows);
+    res.json(rows.map(row => presentClassroom(row, row.group_count)));
   });
 
   app.post('/api/student/join', (req, res) => {
@@ -154,12 +175,21 @@ function createApp(options = {}) {
       id: group.id,
       name: group.name,
       joinCode: group.join_code,
-      submissions: submissions.filter(submission => submission.groupId === group.id)
+      submissions: submissions.filter(submission => submission.groupId === group.id),
+      errorStatsByTask: taskTypes.reduce((stats, taskType) => {
+        stats[taskType] = {};
+        submissions
+          .filter(submission => submission.groupId === group.id && submission.taskType === taskType)
+          .forEach(submission => submission.errorTypes.forEach(type => {
+            stats[taskType][type] = (stats[taskType][type] || 0) + 1;
+          }));
+        return stats;
+      }, {})
     }));
     const totalSubmissions = submissions.length;
     const correctSubmissions = submissions.filter(item => item.isCorrect).length;
     const taskStats = {};
-    for (const taskType of ['stir', 'temp', 'size']) {
+    for (const taskType of taskTypes) {
       const taskSubmissions = submissions.filter(item => item.taskType === taskType);
       taskStats[taskType] = {
         total: taskSubmissions.length,
@@ -175,7 +205,7 @@ function createApp(options = {}) {
       errorCounts[type] += 1;
     }));
     res.json({
-      classroom,
+      classroom: presentClassroom(classroom, groups.length),
       summary: {
         totalSubmissions,
         correctSubmissions,

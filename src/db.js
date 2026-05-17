@@ -14,6 +14,7 @@ function createDb(dbPath) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       teacher_id INTEGER NOT NULL REFERENCES teachers(id),
       name TEXT NOT NULL,
+      simulation_type TEXT NOT NULL DEFAULT 'salt_dissolution',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS groups (
@@ -37,6 +38,10 @@ function createDb(dbPath) {
       submitted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  const classroomColumns = db.prepare('PRAGMA table_info(classrooms)').all().map(column => column.name);
+  if (!classroomColumns.includes('simulation_type')) {
+    db.exec("ALTER TABLE classrooms ADD COLUMN simulation_type TEXT NOT NULL DEFAULT 'salt_dissolution'");
+  }
 
   db.prepare(`
     INSERT OR IGNORE INTO teachers (username, password)
