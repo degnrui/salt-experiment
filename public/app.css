@@ -84,7 +84,14 @@ button {
 .teacher-shell { max-width: 1220px; margin: 0 auto; display: grid; gap: 20px; }
 .login-panel { width: min(420px, 100%); display: grid; gap: 14px; }
 .course-grid { display: grid; grid-template-columns: repeat(auto-fill, 280px); gap: 18px; }
-.course-card, .create-card { width: 280px; min-height: 170px; display: grid; align-content: space-between; cursor: pointer; }
+.course-card, .create-card {
+  width: 280px;
+  min-height: 170px;
+  box-sizing: border-box;
+  display: grid;
+  align-content: space-between;
+  cursor: pointer;
+}
 .course-card { position: relative; }
 .course-card h2 { margin: 0; }
 .meta { display: flex; gap: 10px; flex-wrap: wrap; }
