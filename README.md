@@ -41,6 +41,11 @@ npm test
 
 - 应用是标准 Node.js 服务，可部署到任意支持 Node 的服务器。
 - 默认数据库文件为项目根目录下的 `data.sqlite`。
+- 仓库已包含 GitHub Actions 自动部署工作流；向 `main` 分支推送后，会通过 SSH 自动执行 `scripts/deploy.sh`。
+- 需要在 GitHub 仓库 Secrets 中配置：
+  - `ECS_HOST`
+  - `ECS_USER`
+  - `ECS_SSH_KEY`
 - 生产环境建议：
   - 通过反向代理启用 HTTPS。
   - 将默认教师密码改成环境变量或正式账号体系。
