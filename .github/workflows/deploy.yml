@@ -16,4 +16,4 @@ jobs:
           username: ${{ secrets.ECS_USER }}
           key: ${{ secrets.ECS_SSH_KEY }}
           script: |
-            bash ~/salt-experiment/scripts/deploy.sh
+            curl -fsSL https://raw.githubusercontent.com/degnrui/salt-experiment/main/scripts/deploy.sh | bash
