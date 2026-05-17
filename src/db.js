@@ -15,6 +15,7 @@ function createDb(dbPath) {
       teacher_id INTEGER NOT NULL REFERENCES teachers(id),
       name TEXT NOT NULL,
       simulation_type TEXT NOT NULL DEFAULT 'salt_dissolution',
+      deleted_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS groups (
@@ -41,6 +42,9 @@ function createDb(dbPath) {
   const classroomColumns = db.prepare('PRAGMA table_info(classrooms)').all().map(column => column.name);
   if (!classroomColumns.includes('simulation_type')) {
     db.exec("ALTER TABLE classrooms ADD COLUMN simulation_type TEXT NOT NULL DEFAULT 'salt_dissolution'");
+  }
+  if (!classroomColumns.includes('deleted_at')) {
+    db.exec('ALTER TABLE classrooms ADD COLUMN deleted_at TEXT');
   }
 
   db.prepare(`

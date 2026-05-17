@@ -14,6 +14,7 @@
       <input id="username" value="teacher" placeholder="用户名">
       <input id="password" type="password" value="teacher123" placeholder="密码">
       <button id="login-btn">登录</button>
+      <button id="register-btn" class="secondary">注册</button>
       <p id="login-error" class="bad"></p>
     </section>
   </main>
@@ -23,6 +24,7 @@
       <header>
         <p class="muted">教师端</p>
         <h1>课程空间</h1>
+        <button id="trash-btn" class="secondary">回收站</button>
       </header>
       <section id="course-grid" class="course-grid"></section>
     </section>
@@ -63,6 +65,15 @@
       <div class="row end">
         <button id="close-create" class="secondary">取消</button>
         <button id="create-btn">创建课程</button>
+      </div>
+    </section>
+  </div>
+  <div id="trash-modal" class="modal">
+    <section class="card modal-panel">
+      <h2>回收站</h2>
+      <div id="trash-list"></div>
+      <div class="row end">
+        <button id="close-trash" class="secondary">关闭</button>
       </div>
     </section>
   </div>
@@ -136,9 +147,15 @@
             <span>${room.groupCount} 个小组</span>
             <span>${room.createdAt.slice(0, 10)}</span>
           </div>
+          <button class="danger delete-course" data-id="${room.id}">删除</button>
         </article>
       `).join('') + `<article id="open-create" class="card create-card">＋ 创建新课程</article>`;
       grid.querySelectorAll('.course-card').forEach(card => card.addEventListener('click', () => openClassroom(card.dataset.id)));
+      grid.querySelectorAll('.delete-course').forEach(button => button.addEventListener('click', async event => {
+        event.stopPropagation();
+        await fetch(`/api/classrooms/${button.dataset.id}`, { method: 'DELETE' });
+        await loadClassrooms();
+      }));
       document.getElementById('open-create').addEventListener('click', () => document.getElementById('create-modal').classList.add('open'));
     }
 
@@ -222,6 +239,20 @@
       await loadClassrooms();
       show('workspace-view');
     });
+    document.getElementById('register-btn').addEventListener('click', async () => {
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username.value, password: password.value })
+      });
+      if (!response.ok) {
+        document.getElementById('login-error').textContent =
+          response.status === 409 ? '用户名已存在' : '注册失败';
+        return;
+      }
+      await loadClassrooms();
+      show('workspace-view');
+    });
     document.getElementById('create-btn').addEventListener('click', async () => {
       const response = await fetch('/api/classrooms', {
         method: 'POST',
@@ -237,6 +268,25 @@
       await loadClassrooms();
     });
     document.getElementById('close-create').addEventListener('click', () => document.getElementById('create-modal').classList.remove('open'));
+    document.getElementById('trash-btn').addEventListener('click', async () => {
+      const rows = await fetch('/api/classrooms/trash').then(response => response.json());
+      document.getElementById('trash-list').innerHTML = rows.map(room => `
+        <div class="trash-row">
+          <div>
+            <strong>${room.name}</strong>
+            <p class="muted">已删除，保留 5 天</p>
+          </div>
+          <button class="restore-btn" data-id="${room.id}">恢复</button>
+        </div>
+      `).join('') || '<p class="muted">回收站为空</p>';
+      document.querySelectorAll('.restore-btn').forEach(button => button.addEventListener('click', async () => {
+        await fetch(`/api/classrooms/${button.dataset.id}/restore`, { method: 'POST' });
+        await loadClassrooms();
+        button.closest('.trash-row').remove();
+      }));
+      document.getElementById('trash-modal').classList.add('open');
+    });
+    document.getElementById('close-trash').addEventListener('click', () => document.getElementById('trash-modal').classList.remove('open'));
     document.getElementById('back-btn').addEventListener('click', () => show('workspace-view'));
     setInterval(() => currentClassroomId && !document.getElementById('detail-view').hidden && openClassroom(currentClassroomId), 5000);
   </script>

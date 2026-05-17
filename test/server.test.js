@@ -16,6 +16,12 @@ async function loginTeacher(app) {
   return response.headers['set-cookie'];
 }
 
+async function registerTeacher(app, username) {
+  return request(app)
+    .post('/api/auth/register')
+    .send({ username, password: 'secret123' });
+}
+
 test('teacher can create classroom and student can submit through group code', async () => {
   const app = createTestApp();
   const cookies = await loginTeacher(app);
@@ -108,6 +114,48 @@ test('classroom list includes display metadata for the course workspace', async 
   assert.equal(classrooms.body[0].groupCount, 5);
 });
 
+test('teachers can register and only see their own classrooms', async () => {
+  const app = createTestApp();
+  const first = await registerTeacher(app, 'teacher_a');
+  const duplicate = await registerTeacher(app, 'teacher_a');
+  const second = await registerTeacher(app, 'teacher_b');
+  assert.equal(first.status, 201);
+  assert.equal(duplicate.status, 409);
+  assert.equal(second.status, 201);
+
+  await request(app)
+    .post('/api/classrooms')
+    .set('Cookie', first.headers['set-cookie'])
+    .send({ name: 'A 班', groupCount: 1, simulationType: 'salt_dissolution' });
+  await request(app)
+    .post('/api/classrooms')
+    .set('Cookie', second.headers['set-cookie'])
+    .send({ name: 'B 班', groupCount: 1, simulationType: 'salt_dissolution' });
+
+  const firstRooms = await request(app).get('/api/classrooms').set('Cookie', first.headers['set-cookie']);
+  const secondRooms = await request(app).get('/api/classrooms').set('Cookie', second.headers['set-cookie']);
+  assert.deepEqual(firstRooms.body.map(room => room.name), ['A 班']);
+  assert.deepEqual(secondRooms.body.map(room => room.name), ['B 班']);
+});
+
+test('deleted classrooms move to trash, block joins, and can be restored', async () => {
+  const app = createTestApp();
+  const cookies = await loginTeacher(app);
+  const classroom = await request(app)
+    .post('/api/classrooms')
+    .set('Cookie', cookies)
+    .send({ name: '待删除课程', groupCount: 1, simulationType: 'salt_dissolution' });
+  const joinCode = classroom.body.groups[0].joinCode;
+
+  assert.equal((await request(app).delete(`/api/classrooms/${classroom.body.id}`).set('Cookie', cookies)).status, 204);
+  assert.deepEqual((await request(app).get('/api/classrooms').set('Cookie', cookies)).body, []);
+  assert.equal((await request(app).post('/api/student/join').send({ joinCode })).status, 404);
+  const trash = await request(app).get('/api/classrooms/trash').set('Cookie', cookies);
+  assert.equal(trash.body[0].name, '待删除课程');
+  assert.equal((await request(app).post(`/api/classrooms/${classroom.body.id}/restore`).set('Cookie', cookies)).status, 200);
+  assert.equal((await request(app).post('/api/student/join').send({ joinCode })).status, 200);
+});
+
 test('serves student and teacher pages', async () => {
   const app = createTestApp();
 
@@ -118,4 +166,6 @@ test('serves student and teacher pages', async () => {
   assert.match(teacherPage.text, /课程空间/);
   assert.match(teacherPage.text, /create-modal/);
   assert.match(teacherPage.text, /detail-view/);
+  assert.match(teacherPage.text, /注册/);
+  assert.match(teacherPage.text, /回收站/);
 });

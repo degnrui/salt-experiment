@@ -57,6 +57,21 @@ function createApp(options = {}) {
     res.json({ id: teacher.id, username: teacher.username });
   });
 
+  app.post('/api/auth/register', (req, res) => {
+    const username = String(req.body.username || '').trim();
+    const password = String(req.body.password || '');
+    if (!username || password.length < 6) return res.status(400).json({ error: 'invalid_registration' });
+    try {
+      const teacher = db.prepare(
+        'INSERT INTO teachers (username, password) VALUES (?, ?) RETURNING *'
+      ).get(username, password);
+      res.cookie('teacherId', teacher.id, { httpOnly: true, sameSite: 'lax' });
+      res.status(201).json({ id: teacher.id, username: teacher.username });
+    } catch {
+      res.status(409).json({ error: 'username_exists' });
+    }
+  });
+
   app.post('/api/classrooms', requireTeacher, (req, res) => {
     const name = String(req.body.name || '').trim();
     const groupCount = Number(req.body.groupCount || 0);
@@ -89,6 +104,7 @@ function createApp(options = {}) {
        FROM classrooms c
        LEFT JOIN groups g ON g.classroom_id = c.id
        WHERE c.teacher_id = ?
+         AND c.deleted_at IS NULL
        GROUP BY c.id
        ORDER BY c.created_at DESC, c.id DESC`
     ).all(req.teacher.id);
@@ -101,6 +117,7 @@ function createApp(options = {}) {
       FROM groups g
       JOIN classrooms c ON c.id = g.classroom_id
       WHERE g.join_code = ?
+        AND c.deleted_at IS NULL
     `).get(String(req.body.joinCode || '').trim().toUpperCase());
     if (!group) return res.status(404).json({ error: 'invalid_join_code' });
     res.json({
@@ -111,7 +128,12 @@ function createApp(options = {}) {
 
   app.post('/api/submissions', (req, res) => {
     const joinCode = String(req.body.joinCode || '').trim().toUpperCase();
-    const group = db.prepare('SELECT * FROM groups WHERE join_code = ?').get(joinCode);
+    const group = db.prepare(`
+      SELECT g.*
+      FROM groups g
+      JOIN classrooms c ON c.id = g.classroom_id
+      WHERE g.join_code = ? AND c.deleted_at IS NULL
+    `).get(joinCode);
     if (!group) return res.status(404).json({ error: 'invalid_join_code' });
     const required = ['taskType', 'beakerA', 'beakerB'];
     if (required.some(key => !req.body[key])) {
@@ -145,7 +167,7 @@ function createApp(options = {}) {
 
   app.get('/api/classrooms/:id/dashboard', requireTeacher, (req, res) => {
     const classroom = db.prepare(
-      'SELECT * FROM classrooms WHERE id = ? AND teacher_id = ?'
+      'SELECT * FROM classrooms WHERE id = ? AND teacher_id = ? AND deleted_at IS NULL'
     ).get(req.params.id, req.teacher.id);
     if (!classroom) return res.status(404).json({ error: 'not_found' });
 
@@ -217,6 +239,48 @@ function createApp(options = {}) {
       groups
     });
   });
+
+  app.delete('/api/classrooms/:id', requireTeacher, (req, res) => {
+    const result = db.prepare(`
+      UPDATE classrooms
+      SET deleted_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND teacher_id = ? AND deleted_at IS NULL
+    `).run(req.params.id, req.teacher.id);
+    if (!result.changes) return res.status(404).json({ error: 'not_found' });
+    res.status(204).end();
+  });
+
+  app.get('/api/classrooms/trash', requireTeacher, (req, res) => {
+    const rows = db.prepare(`
+      SELECT c.*, COUNT(g.id) AS group_count
+      FROM classrooms c
+      LEFT JOIN groups g ON g.classroom_id = c.id
+      WHERE c.teacher_id = ? AND c.deleted_at IS NOT NULL
+      GROUP BY c.id
+      ORDER BY c.deleted_at DESC
+    `).all(req.teacher.id);
+    res.json(rows.map(row => ({ ...presentClassroom(row, row.group_count), deletedAt: row.deleted_at })));
+  });
+
+  app.post('/api/classrooms/:id/restore', requireTeacher, (req, res) => {
+    const result = db.prepare(`
+      UPDATE classrooms
+      SET deleted_at = NULL
+      WHERE id = ? AND teacher_id = ? AND deleted_at IS NOT NULL
+    `).run(req.params.id, req.teacher.id);
+    if (!result.changes) return res.status(404).json({ error: 'not_found' });
+    res.json({ ok: true });
+  });
+
+  function purgeExpiredClassrooms() {
+    db.prepare(`
+      DELETE FROM classrooms
+      WHERE deleted_at IS NOT NULL
+        AND datetime(deleted_at) <= datetime('now', '-5 days')
+    `).run();
+  }
+  purgeExpiredClassrooms();
+  setInterval(purgeExpiredClassrooms, 60 * 60 * 1000).unref();
 
   return app;
 }
