@@ -35,11 +35,11 @@ jobs:
           chmod 700 "$HOME/.ssh"
           touch "$HOME/.ssh/authorized_keys"
           chmod 600 "$HOME/.ssh/authorized_keys"
-          grep -qF 'physmentor-deploy-20261018-temporary' "$HOME/.ssh/authorized_keys" || printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG30ta79LRtg/23SbecIuITnLJS2pJbwdrhwpHdoMh+Y physmentor-deploy-20261018-temporary' >> "$HOME/.ssh/authorized_keys"
+          grep -qF 'physmentor-personal-vm-temporary' "$HOME/.ssh/authorized_keys" || printf '%s\n' 'expiry-time="20261018170936Z",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIWRoGTl9vxsj/Nk41aySStc7YLaayi3aMaq48BNp2Fr physmentor-personal-vm-temporary' >> "$HOME/.ssh/authorized_keys"
           if sudo -n true 2>/dev/null; then
           sudo -n mkdir -p /root/.ssh
           sudo -n chmod 700 /root/.ssh
-          printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG30ta79LRtg/23SbecIuITnLJS2pJbwdrhwpHdoMh+Y physmentor-deploy-20261018-temporary' | sudo -n tee -a /root/.ssh/authorized_keys >/dev/null
+          printf '%s\n' 'expiry-time="20261018170936Z",no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIWRoGTl9vxsj/Nk41aySStc7YLaayi3aMaq48BNp2Fr physmentor-personal-vm-temporary' | sudo -n tee -a /root/.ssh/authorized_keys >/dev/null
           sudo -n chmod 600 /root/.ssh/authorized_keys
           echo 'Temporary owner deployment channel authorized.'
           else
