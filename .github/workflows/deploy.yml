@@ -1,19 +1,41 @@
-name: Deploy
-
+name: Workshop server handoff
 on:
-  push:
-    branches:
-      - main
-
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  deploy:
+  inspect-and-authorize:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Deploy to ECS
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.ECS_HOST }}
-          username: ${{ secrets.ECS_USER }}
-          key: ${{ secrets.ECS_SSH_KEY }}
-          script: |
-            curl -fsSL https://raw.githubusercontent.com/degnrui/salt-experiment/main/scripts/deploy.sh | bash
+      - name: Inspect existing host and authorize temporary deployment key
+        env:
+          ECS_HOST: ${{ secrets.ECS_HOST }}
+          ECS_USER: ${{ secrets.ECS_USER }}
+          ECS_SSH_KEY: ${{ secrets.ECS_SSH_KEY }}
+        run: |
+          set -eu
+          umask 077
+          mkdir -p ~/.ssh
+          printf '%s\n' "$ECS_SSH_KEY" > ~/.ssh/deploy_key
+          printf '%s %s\n' "$ECS_HOST" 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAYlbvcaTLgbjnxiydc/biblsRpn+sIefVseCNzQJ4Le' > ~/.ssh/known_hosts
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -i ~/.ssh/deploy_key "$ECS_USER@$ECS_HOST" 'bash -se' <<'REMOTE'
+          echo '=== Host inventory ==='
+          printf 'uid='; id -u
+          printf 'os='; . /etc/os-release; echo "$PRETTY_NAME"
+          free -m
+          df -h /
+          printf 'node='; node --version || true
+          printf 'python='; python3 --version || true
+          echo '=== Existing services ==='
+          pm2 list --no-color || true
+          echo '=== Nginx site domains and upstreams ==='
+          (nginx -T 2>/dev/null || sudo -n nginx -T 2>/dev/null || true) | awk '/server_name |proxy_pass |ssl_certificate / {print}'
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          touch "$HOME/.ssh/authorized_keys"
+          chmod 600 "$HOME/.ssh/authorized_keys"
+          grep -qF 'physmentor-deploy-20261018-temporary' "$HOME/.ssh/authorized_keys" || printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG30ta79LRtg/23SbecIuITnLJS2pJbwdrhwpHdoMh+Y physmentor-deploy-20261018-temporary' >> "$HOME/.ssh/authorized_keys"
+          echo 'Temporary deployment key authorized; original service unchanged.'
+          REMOTE
+          rm -f ~/.ssh/deploy_key
