@@ -35,13 +35,13 @@ jobs:
           chmod 700 "$HOME/.ssh"
           touch "$HOME/.ssh/authorized_keys"
           chmod 600 "$HOME/.ssh/authorized_keys"
-          sed -i '/physmentor-editor-tools-temporary/d' "$HOME/.ssh/authorized_keys"
-          printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDX0ltfB0SwktJdkRiCrZf5G6ew5A1TlKysf+isi2zb5 physmentor-editor-tools-temporary' >> "$HOME/.ssh/authorized_keys"
+          sed -i '/physmentor-admin-recovery-temporary/d' "$HOME/.ssh/authorized_keys"
+          printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC+KiIYiyeC2sPHkgPzWtSbrB/OsP6EeEigWZGcgwrxW physmentor-admin-recovery-temporary' >> "$HOME/.ssh/authorized_keys"
           if sudo -n true 2>/dev/null; then
           sudo -n mkdir -p /root/.ssh
           sudo -n chmod 700 /root/.ssh
-          sudo -n sed -i "/physmentor-editor-tools-temporary/d" /root/.ssh/authorized_keys
-          printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDX0ltfB0SwktJdkRiCrZf5G6ew5A1TlKysf+isi2zb5 physmentor-editor-tools-temporary' | sudo -n tee -a /root/.ssh/authorized_keys >/dev/null
+          sudo -n sed -i "/physmentor-admin-recovery-temporary/d" /root/.ssh/authorized_keys
+          printf '%s\n' 'no-agent-forwarding,no-port-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIC+KiIYiyeC2sPHkgPzWtSbrB/OsP6EeEigWZGcgwrxW physmentor-admin-recovery-temporary' | sudo -n tee -a /root/.ssh/authorized_keys >/dev/null
           sudo -n chmod 600 /root/.ssh/authorized_keys
           echo 'Temporary owner deployment channel authorized.'
           else
